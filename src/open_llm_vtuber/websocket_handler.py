@@ -97,6 +97,35 @@ class WebSocketHandler:
             "heartbeat": self._handle_heartbeat,
         }
 
+    async def push_vrm_motion(
+        self, message: dict, target_client_uid: Optional[str] = None
+    ) -> int:
+        """
+        Send a VRM motion payload to either a single client or broadcast it to all clients.
+
+        Returns:
+            int: Number of clients the message was delivered to.
+        """
+
+        payload = json.dumps(message)
+        delivered = 0
+
+        if target_client_uid:
+            websocket = self.client_connections.get(target_client_uid)
+            if websocket:
+                await websocket.send_text(payload)
+                delivered = 1
+            return delivered
+
+        for client_uid, websocket in self.client_connections.items():
+            try:
+                await websocket.send_text(payload)
+                delivered += 1
+            except Exception as exc:
+                logger.error(f"Failed to deliver VRM motion to {client_uid}: {exc}")
+
+        return delivered
+
     async def handle_new_connection(
         self, websocket: WebSocket, client_uid: str
     ) -> None:

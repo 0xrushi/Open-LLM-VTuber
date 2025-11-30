@@ -3,7 +3,9 @@ import json
 from uuid import uuid4
 import numpy as np
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, UploadFile, File, Response
+from typing import Optional, List
+from fastapi import APIRouter, WebSocket, UploadFile, File, Response, HTTPException
+from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 from starlette.websockets import WebSocketDisconnect
 from loguru import logger
@@ -12,7 +14,74 @@ from .websocket_handler import WebSocketHandler
 from .proxy_handler import ProxyHandler
 
 
-def init_client_ws_route(default_context_cache: ServiceContext) -> APIRouter:
+class RotationPayload(BaseModel):
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+    w: Optional[float] = Field(default=None, description="Quaternion W component. When omitted, XYZ is treated as Euler angles.")
+
+
+class PositionPayload(BaseModel):
+    x: Optional[float] = None
+    y: Optional[float] = None
+    z: Optional[float] = None
+
+
+class VRMBonePayload(BaseModel):
+    name: str = Field(..., description="Humanoid bone name (e.g. RightLowerArm)")
+    rotation: Optional[RotationPayload] = None
+    position: Optional[PositionPayload] = None
+
+
+class VRMMotionPayload(BaseModel):
+    bones: List[VRMBonePayload] = Field(..., description="List of bone poses to apply immediately")
+    target_client_uid: Optional[str] = Field(
+        default=None,
+        description="Optional client UID to deliver the pose to. When omitted, the pose is broadcast.",
+    )
+
+
+def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
+    """
+    Create and return routes responsible for VRM-specific HTTP APIs.
+    """
+
+    router = APIRouter()
+
+    @router.post("/vrm/motion")
+    async def push_vrm_motion(payload: VRMMotionPayload):
+        if not payload.bones:
+            raise HTTPException(status_code=400, detail="At least one bone pose is required")
+
+        message = {
+            "type": "vrm-motion",
+            "bones": [bone.dict(exclude_none=True) for bone in payload.bones],
+        }
+        delivered = await ws_handler.push_vrm_motion(
+            message,
+            target_client_uid=payload.target_client_uid,
+        )
+        if delivered == 0:
+            raise HTTPException(status_code=404, detail="No active clients available for this request")
+        return {"delivered": delivered, "target_client_uid": payload.target_client_uid}
+
+    return router
+
+
+
+def init_config_routes() -> APIRouter:
+    """
+    Create and return routes responsible for configuration-related HTTP APIs.
+
+    Currently all configuration management is handled via WebSocket messages,
+    so this router is intentionally empty and serves as a placeholder hook
+    for future HTTP config endpoints.
+    """
+    router = APIRouter()
+    return router
+
+
+def init_client_ws_route(ws_handler: WebSocketHandler) -> APIRouter:
     """
     Create and return API routes for handling the `/client-ws` WebSocket connections.
 
@@ -24,7 +93,6 @@ def init_client_ws_route(default_context_cache: ServiceContext) -> APIRouter:
     """
 
     router = APIRouter()
-    ws_handler = WebSocketHandler(default_context_cache)
 
     @router.websocket("/client-ws")
     async def websocket_endpoint(websocket: WebSocket):

@@ -138,6 +138,8 @@ class Live2dModel:
             )
 
         # The feature: "translate model url to full url if it starts with '/' " is no longer implemented here
+        if "renderer" not in matched_model:
+            matched_model["renderer"] = "live2d"
 
         logger.info("Model Information Loaded.")
 

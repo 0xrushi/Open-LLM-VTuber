@@ -26,5 +26,33 @@
                 "": 1
             }
         }
+    },
+    {
+        "name": "vrm_sample",
+        "description": "Sample VRM avatar served from the frontend/models folder",
+        "renderer": "vrm",
+        "url": "/models/testavatar1.vrm",
+        "kScale": 1,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "cameraPosition": [0, 1.3, 1.8],
+        "cameraTarget": [0, 1.3, 0],
+        "autoRotate": true,
+        "emotionMap": {},
+        "tapMotions": {}
+    },
+    {
+        "name": "test_vrm_avatar",
+        "description": "Legacy alias for the sample VRM avatar",
+        "renderer": "vrm",
+        "url": "/models/testavatar1.vrm",
+        "kScale": 1,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "cameraPosition": [0, 1.3, 1.8],
+        "cameraTarget": [0, 1.3, 0],
+        "autoRotate": true,
+        "emotionMap": {},
+        "tapMotions": {}
     }
 ]
