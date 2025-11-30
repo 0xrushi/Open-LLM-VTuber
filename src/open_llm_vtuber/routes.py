@@ -43,19 +43,35 @@ class VRMMotionPayload(BaseModel):
 
 def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
     """
-    Create and return routes responsible for VRM-specific HTTP APIs.
+    Create and return routes responsible for VRM-specific HTTP and WebSocket APIs.
+
+    Provides:
+        - POST /vrm/motion: One-shot bone pose updates
+        - WebSocket /vrm/motion-ws: Streaming bone pose updates for continuous animation
     """
 
     router = APIRouter()
 
     @router.post("/vrm/motion")
     async def push_vrm_motion(payload: VRMMotionPayload):
+        """
+        Apply VRM bone poses immediately via HTTP POST.
+
+        Args:
+            payload: VRMMotionPayload containing bones list and optional target_client_uid.
+
+        Returns:
+            dict: Number of clients the motion was delivered to.
+
+        Raises:
+            HTTPException: 400 if no bones provided, 404 if no active clients.
+        """
         if not payload.bones:
             raise HTTPException(status_code=400, detail="At least one bone pose is required")
 
         message = {
             "type": "vrm-motion",
-            "bones": [bone.dict(exclude_none=True) for bone in payload.bones],
+            "bones": [bone.model_dump(exclude_none=True) for bone in payload.bones],
         }
         delivered = await ws_handler.push_vrm_motion(
             message,
@@ -64,6 +80,64 @@ def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
         if delivered == 0:
             raise HTTPException(status_code=404, detail="No active clients available for this request")
         return {"delivered": delivered, "target_client_uid": payload.target_client_uid}
+
+    @router.websocket("/vrm/motion-ws")
+    async def vrm_motion_stream(websocket: WebSocket):
+        """
+        WebSocket endpoint for streaming VRM bone poses.
+
+        Accepts JSON messages with the following structure:
+        {
+            "bones": [
+                {"name": "rightLowerArm", "rotation": {"x": -1.5708, "y": 0, "z": 0}},
+                ...
+            ],
+            "target_client_uid": "optional-client-id"
+        }
+
+        Each message is broadcast to connected frontend clients displaying VRM models.
+        This is more efficient than REST for continuous animations (30-60 FPS).
+        """
+        await websocket.accept()
+        logger.info("VRM motion streaming WebSocket connection established")
+
+        try:
+            while True:
+                data = await websocket.receive_json()
+
+                # Validate bones data
+                bones = data.get("bones")
+                if not bones or not isinstance(bones, list):
+                    await websocket.send_json({
+                        "status": "error",
+                        "message": "Invalid payload: 'bones' array is required"
+                    })
+                    continue
+
+                # Build the motion message
+                message = {
+                    "type": "vrm-motion",
+                    "bones": bones,
+                }
+
+                # Broadcast to frontend clients
+                target_client_uid = data.get("target_client_uid")
+                delivered = await ws_handler.push_vrm_motion(
+                    message,
+                    target_client_uid=target_client_uid,
+                )
+
+                # Send acknowledgment back to the streaming client
+                await websocket.send_json({
+                    "status": "ok",
+                    "delivered": delivered,
+                })
+
+        except WebSocketDisconnect:
+            logger.info("VRM motion streaming WebSocket client disconnected")
+        except Exception as e:
+            logger.error(f"Error in VRM motion streaming WebSocket: {e}")
+            await websocket.close()
 
     return router
 
