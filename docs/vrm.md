@@ -69,6 +69,7 @@ Send a `POST` request to `/vrm/motion` with a JSON payload that describes each b
 ```jsonc
 {
   "target_client_uid": null,             // Optional. When omitted, the pose is broadcast to all viewers.
+  "worldQuaternion": false,              // Optional. When true, rotations are interpreted as world-space quaternions.
   "bones": [
     {
       "name": "RightLowerArm",
@@ -86,6 +87,7 @@ Send a `POST` request to `/vrm/motion` with a JSON payload that describes each b
 - `rotation`: When a `w` component is provided it is treated as a quaternion. Otherwise the `x/y/z` values are interpreted as radians (XYZ Euler order).
 - `position`: Optional absolute position override (in meters) for the selected bone.
 - `target_client_uid`: Use the UID that the frontend logs on connect to drive a single avatar. Leave it empty to broadcast to all connected tabs.
+- `worldQuaternion`: When `true`, the viewer treats each `rotation` quaternion as a world-space orientation and converts it to local bone space on the client. Leave it `false`/omit it for traditional local-space updates.
 
 The server immediately forwards the payload over `/client-ws` as a `vrm-motion` message, and the new renderer applies it frame-perfectly.  
 This makes it easy to stream gestures from another process (e.g. motion capture) or script quick poses without touching the React layer.

@@ -149,12 +149,29 @@ class WebSocketServer:
             AvatarStaticFiles(directory="avatars"),
             name="avatars",
         )
+        
+        # Mount models directory
+        # The VRM models are located in frontend/models
+        models_dir = "frontend/models"
+        if os.path.exists(models_dir):
+            self.app.mount(
+                "/models",
+                CORSStaticFiles(directory=models_dir),
+                name="models",
+            )
 
         # Mount web tool directory separately from frontend
         self.app.mount(
             "/web-tool",
             CORSStaticFiles(directory="web_tool", html=True),
             name="web_tool",
+        )
+
+        # Mount mediapipe-avatar for standalone testing/use
+        self.app.mount(
+            "/mediapipe-avatar",
+            CORSStaticFiles(directory="mediapipe-avatar", html=True),
+            name="mediapipe-avatar",
         )
 
         # Mount main frontend last (as catch-all)

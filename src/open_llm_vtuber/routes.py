@@ -39,6 +39,15 @@ class VRMMotionPayload(BaseModel):
         default=None,
         description="Optional client UID to deliver the pose to. When omitted, the pose is broadcast.",
     )
+    worldQuaternion: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true, treat each bone.rotation quaternion as a world-space "
+            "orientation and convert it to local space on the client. "
+            "When omitted or false, rotations are interpreted as local (Euler XYZ "
+            "if w is absent, quaternion otherwise)."
+        ),
+    )
 
 
 def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
@@ -73,6 +82,8 @@ def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
             "type": "vrm-motion",
             "bones": [bone.model_dump(exclude_none=True) for bone in payload.bones],
         }
+        if payload.worldQuaternion is not None:
+            message["worldQuaternion"] = payload.worldQuaternion
         delivered = await ws_handler.push_vrm_motion(
             message,
             target_client_uid=payload.target_client_uid,
@@ -119,6 +130,10 @@ def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
                     "type": "vrm-motion",
                     "bones": bones,
                 }
+
+                world_quaternion_flag = data.get("worldQuaternion")
+                if isinstance(world_quaternion_flag, bool):
+                    message["worldQuaternion"] = world_quaternion_flag
 
                 # Broadcast to frontend clients
                 target_client_uid = data.get("target_client_uid")

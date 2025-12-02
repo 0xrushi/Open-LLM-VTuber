@@ -54,5 +54,61 @@
         "autoRotate": true,
         "emotionMap": {},
         "tapMotions": {}
+    },
+    {
+        "name": "glb_male",
+        "description": "GLB male model from mediapipe-avatar (for testing)",
+        "renderer": "vrm",
+        "url": "/models/male.glb",
+        "kScale": 1,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "cameraPosition": [0, 1.3, 1.8],
+        "cameraTarget": [0, 1.3, 0],
+        "autoRotate": true,
+        "emotionMap": {},
+        "tapMotions": {}
+    },
+    {
+        "name": "lyra_glb",
+        "description": "Lyra Casual Outfit (GLB)",
+        "renderer": "vrm",
+        "url": "/models/Lyra Casual Outfit.glb",
+        "kScale": 1,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "cameraPosition": [0, 1.3, 1.8],
+        "cameraTarget": [0, 1.3, 0],
+        "autoRotate": false,
+        "emotionMap": {},
+        "tapMotions": {}
+    },
+    {
+        "name": "biped_glb",
+        "description": "Custom Biped GLB character",
+        "renderer": "vrm",
+        "url": "/models/biped_character.glb",
+        "kScale": 1,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "cameraPosition": [0, 1.3, 1.8],
+        "cameraTarget": [0, 1.3, 0],
+        "autoRotate": true,
+        "emotionMap": {},
+        "tapMotions": {}
+    },
+    {
+        "name": "character_blue",
+        "description": "Character Blue GLB with many animations",
+        "renderer": "vrm",
+        "url": "/models/character_blue.glb",
+        "kScale": 1,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "cameraPosition": [0, 1.3, 1.8],
+        "cameraTarget": [0, 1.3, 0],
+        "autoRotate": true,
+        "emotionMap": {},
+        "tapMotions": {}
     }
 ]
