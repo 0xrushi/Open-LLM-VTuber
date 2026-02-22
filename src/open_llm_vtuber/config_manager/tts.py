@@ -680,6 +680,175 @@ class CartesiaTTSConfig(I18nMixin):
     }
 
 
+class IndexTTS2Config(I18nMixin):
+    """Configuration for IndexTTS2."""
+
+    api_url: str = Field("http://localhost:5000/synthesize", alias="api_url")
+    voice_id: str = Field("voice_01.wav", alias="voice_id")
+    emo_text: Optional[str] = Field(None, alias="emo_text")
+    use_streaming: bool = Field(False, alias="use_streaming")
+
+    DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
+        "api_url": Description(
+            en="URL of the IndexTTS API endpoint", zh="IndexTTS API 端点的 URL"
+        ),
+        "voice_id": Description(
+            en="Filename of the speaker reference audio (e.g., voice_01.wav)",
+            zh="说话人参考音频文件名（如 voice_01.wav）",
+        ),
+        "emo_text": Description(
+            en="Optional emotion description text", zh="可选的情感描述文本"
+        ),
+        "use_streaming": Description(
+            en="Use streaming endpoint for faster audio playback",
+            zh="使用流式端点以加快音频播放速度"
+        ),
+    }
+
+
+class ChatterboxTTSConfig(I18nMixin):
+    """Configuration for Chatterbox-TTS-Server custom /tts endpoint."""
+
+    api_url: str = Field("http://127.0.0.1:8004/tts", alias="api_url")
+    voice_mode: Literal["predefined", "clone"] = Field("predefined", alias="voice_mode")
+    predefined_voice_id: Optional[str] = Field("default_sample.wav", alias="predefined_voice_id")
+    reference_audio_filename: Optional[str] = Field(None, alias="reference_audio_filename")
+    output_format: Literal["wav", "opus", "mp3"] = Field("wav", alias="output_format")
+    split_text: bool = Field(True, alias="split_text")
+    chunk_size: int = Field(120, alias="chunk_size")
+    temperature: Optional[float] = Field(None, alias="temperature")
+    exaggeration: Optional[float] = Field(None, alias="exaggeration")
+    cfg_weight: Optional[float] = Field(None, alias="cfg_weight")
+    seed: Optional[int] = Field(None, alias="seed")
+    speed_factor: Optional[float] = Field(None, alias="speed_factor")
+    language: Optional[str] = Field(None, alias="language")
+    timeout_sec: int = Field(300, alias="timeout_sec")
+
+    DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
+        "api_url": Description(
+            en="URL of Chatterbox-TTS-Server /tts endpoint",
+            zh="Chatterbox-TTS-Server /tts 端点 URL",
+        ),
+        "voice_mode": Description(
+            en="Voice mode: predefined or clone",
+            zh="语音模式：predefined 或 clone",
+        ),
+        "predefined_voice_id": Description(
+            en="Predefined voice filename in server's voices folder",
+            zh="服务器 voices 目录中的预置音色文件名",
+        ),
+        "reference_audio_filename": Description(
+            en="Reference filename (clone mode)",
+            zh="参考音频文件名（clone 模式）",
+        ),
+        "output_format": Description(
+            en="Output audio format: wav, opus, or mp3",
+            zh="输出格式：wav、opus 或 mp3",
+        ),
+        "split_text": Description(
+            en="Enable long-text splitting on server",
+            zh="是否在服务端启用长文本切分",
+        ),
+        "chunk_size": Description(
+            en="Chunk size for server-side text splitting",
+            zh="服务端文本切分块大小",
+        ),
+        "temperature": Description(
+            en="Sampling temperature (optional)",
+            zh="采样温度（可选）",
+        ),
+        "exaggeration": Description(
+            en="Voice exaggeration intensity (optional)",
+            zh="语气夸张强度（可选）",
+        ),
+        "cfg_weight": Description(
+            en="CFG guidance weight (optional)",
+            zh="CFG 引导权重（可选）",
+        ),
+        "seed": Description(
+            en="Random seed (optional)",
+            zh="随机种子（可选）",
+        ),
+        "speed_factor": Description(
+            en="Speech speed factor (optional)",
+            zh="语速系数（可选）",
+        ),
+        "language": Description(
+            en="Language hint (optional)",
+            zh="语言提示（可选）",
+        ),
+        "timeout_sec": Description(
+            en="HTTP timeout in seconds",
+            zh="HTTP 超时时间（秒）",
+        ),
+    }
+
+
+class ChatterboxTurboAPITTSConfig(I18nMixin):
+    """Configuration for Chatterbox Turbo API endpoint."""
+
+    api_url: str = Field(
+        "https://api.segmind.com/v1/chatterbox-turbo-tts", alias="api_url"
+    )
+    api_key: Optional[str] = Field(None, alias="api_key")
+    reference_audio_url: Optional[str] = Field(None, alias="reference_audio_url")
+    temperature: Optional[float] = Field(None, alias="temperature")
+    seed: Optional[int] = Field(None, alias="seed")
+    min_p: Optional[float] = Field(None, alias="min_p")
+    top_p: Optional[float] = Field(None, alias="top_p")
+    top_k: Optional[int] = Field(None, alias="top_k")
+    repetition_penalty: Optional[float] = Field(None, alias="repetition_penalty")
+    norm_loudness: Optional[bool] = Field(None, alias="norm_loudness")
+    timeout_sec: int = Field(300, alias="timeout_sec")
+
+    DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
+        "api_url": Description(
+            en="URL of Chatterbox Turbo API endpoint",
+            zh="Chatterbox Turbo API 端点 URL",
+        ),
+        "api_key": Description(
+            en="API key for Chatterbox Turbo API",
+            zh="Chatterbox Turbo API 密钥",
+        ),
+        "reference_audio_url": Description(
+            en="Reference audio URL required by the API",
+            zh="API 要求的参考音频 URL",
+        ),
+        "temperature": Description(
+            en="Sampling temperature (optional)",
+            zh="采样温度（可选）",
+        ),
+        "seed": Description(
+            en="Random seed (optional)",
+            zh="随机种子（可选）",
+        ),
+        "min_p": Description(
+            en="Minimum token probability threshold (optional)",
+            zh="最小概率阈值（可选）",
+        ),
+        "top_p": Description(
+            en="Top-p nucleus sampling (optional)",
+            zh="Top-p 核采样（可选）",
+        ),
+        "top_k": Description(
+            en="Top-k sampling value (optional)",
+            zh="Top-k 采样值（可选）",
+        ),
+        "repetition_penalty": Description(
+            en="Repetition penalty (optional)",
+            zh="重复惩罚（可选）",
+        ),
+        "norm_loudness": Description(
+            en="Normalize output loudness (optional)",
+            zh="归一化输出响度（可选）",
+        ),
+        "timeout_sec": Description(
+            en="HTTP timeout in seconds",
+            zh="HTTP 超时时间（秒）",
+        ),
+    }
+
+
 class TTSConfig(I18nMixin):
     """Configuration for Text-to-Speech."""
 
@@ -696,12 +865,15 @@ class TTSConfig(I18nMixin):
         "fish_api_tts",
         "sherpa_onnx_tts",
         "siliconflow_tts",
-        "openai_tts",  # Add openai_tts here
+        "openai_tts",
         "spark_tts",
         "minimax_tts",
         "elevenlabs_tts",
         "cartesia_tts",
         "piper_tts",
+        "indextts2_tts",
+        "chatterbox_tts",
+        "chatterbox_turbo_api_tts",
     ] = Field(..., alias="tts_model")
 
     azure_tts: Optional[AzureTTSConfig] = Field(None, alias="azure_tts")
@@ -726,6 +898,11 @@ class TTSConfig(I18nMixin):
     elevenlabs_tts: ElevenLabsTTSConfig | None = Field(None, alias="elevenlabs_tts")
     cartesia_tts: CartesiaTTSConfig | None = Field(None, alias="cartesia_tts")
     piper_tts: Optional[PiperTTSConfig] = Field(None, alias="piper_tts")
+    indextts2_tts: Optional[IndexTTS2Config] = Field(None, alias="indextts2_tts")
+    chatterbox_tts: Optional[ChatterboxTTSConfig] = Field(None, alias="chatterbox_tts")
+    chatterbox_turbo_api_tts: Optional[ChatterboxTurboAPITTSConfig] = Field(
+        None, alias="chatterbox_turbo_api_tts"
+    )
 
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
         "tts_model": Description(
@@ -769,6 +946,15 @@ class TTSConfig(I18nMixin):
             en="Configuration for Cartesia TTS", zh="Cartesia TTS 配置"
         ),
         "piper_tts": Description(en="Configuration for Piper TTS", zh="Piper TTS 配置"),
+        "indextts2_tts": Description(
+            en="Configuration for IndexTTS2", zh="IndexTTS2 配置"
+        ),
+        "chatterbox_tts": Description(
+            en="Configuration for Chatterbox-TTS-Server", zh="Chatterbox-TTS-Server 配置"
+        ),
+        "chatterbox_turbo_api_tts": Description(
+            en="Configuration for Chatterbox Turbo API", zh="Chatterbox Turbo API 配置"
+        ),
     }
 
     @model_validator(mode="after")
@@ -813,4 +999,15 @@ class TTSConfig(I18nMixin):
 
         elif tts_model == "piper_tts" and values.piper_tts is not None:
             values.piper_tts.model_validate(values.piper_tts.model_dump())
+        elif tts_model == "indextts2_tts" and values.indextts2_tts is not None:
+            values.indextts2_tts.model_validate(values.indextts2_tts.model_dump())
+        elif tts_model == "chatterbox_tts" and values.chatterbox_tts is not None:
+            values.chatterbox_tts.model_validate(values.chatterbox_tts.model_dump())
+        elif (
+            tts_model == "chatterbox_turbo_api_tts"
+            and values.chatterbox_turbo_api_tts is not None
+        ):
+            values.chatterbox_turbo_api_tts.model_validate(
+                values.chatterbox_turbo_api_tts.model_dump()
+            )
         return values

@@ -211,6 +211,50 @@ class TTSFactory:
                 normalize_audio=kwargs.get("normalize_audio"),
                 use_cuda=kwargs.get("use_cuda"),
             )
+        elif engine_type == "indextts2_tts":
+            from .indextts2_tts import TTSEngine as IndexTTS2Engine
+
+            return IndexTTS2Engine(
+                api_url=kwargs.get("api_url"),
+                voice_id=kwargs.get("voice_id"),
+                emo_text=kwargs.get("emo_text"),
+                use_streaming=kwargs.get("use_streaming", False),
+            )
+        elif engine_type == "chatterbox_tts":
+            from .chatterbox_tts import TTSEngine as ChatterboxTTSEngine
+
+            return ChatterboxTTSEngine(
+                api_url=kwargs.get("api_url"),
+                voice_mode=kwargs.get("voice_mode", "predefined"),
+                predefined_voice_id=kwargs.get("predefined_voice_id", "default_sample.wav"),
+                reference_audio_filename=kwargs.get("reference_audio_filename"),
+                output_format=kwargs.get("output_format", "wav"),
+                split_text=kwargs.get("split_text", True),
+                chunk_size=kwargs.get("chunk_size", 120),
+                temperature=kwargs.get("temperature"),
+                exaggeration=kwargs.get("exaggeration"),
+                cfg_weight=kwargs.get("cfg_weight"),
+                seed=kwargs.get("seed"),
+                speed_factor=kwargs.get("speed_factor"),
+                language=kwargs.get("language"),
+                timeout_sec=kwargs.get("timeout_sec", 300),
+            )
+        elif engine_type == "chatterbox_turbo_api_tts":
+            from .chatterbox_turbo_api_tts import TTSEngine as ChatterboxTurboAPITTSEngine
+
+            return ChatterboxTurboAPITTSEngine(
+                api_url=kwargs.get("api_url", "https://api.segmind.com/v1/chatterbox-turbo-tts"),
+                api_key=kwargs.get("api_key"),
+                reference_audio_url=kwargs.get("reference_audio_url"),
+                temperature=kwargs.get("temperature"),
+                seed=kwargs.get("seed"),
+                min_p=kwargs.get("min_p"),
+                top_p=kwargs.get("top_p"),
+                top_k=kwargs.get("top_k"),
+                repetition_penalty=kwargs.get("repetition_penalty"),
+                norm_loudness=kwargs.get("norm_loudness"),
+                timeout_sec=kwargs.get("timeout_sec", 300),
+            )
         else:
             raise ValueError(f"Unknown TTS engine type: {engine_type}")
 

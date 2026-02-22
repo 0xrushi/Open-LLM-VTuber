@@ -68,6 +68,9 @@ character_config:
         # 'Plus' 意味着它包含了通过 OpenAI API 调用工具的能力。
         use_mcpp: False
         mcp_enabled_servers: ["time", "ddg-search"] # 启用的 MCP 服务器
+        # Guidance 风格的严格路由：让模型先判断是普通对话还是 openclaw 工具调用。
+        guidance_tool_router_enabled: False
+        guidance_tool_router_target_servers: [] # 例如 ["weather", "discord"]
 
       hume_ai_agent:
         api_key: ''
@@ -271,7 +274,7 @@ character_config:
     #   'azure_tts', 'pyttsx3_tts', 'edge_tts', 'bark_tts',
     #   'cosyvoice_tts', 'melo_tts', 'coqui_tts', 'piper_tts',
     #   'fish_api_tts', 'x_tts', 'gpt_sovits_tts', 'sherpa_onnx_tts'
-    #   'minimax_tts', 'elevenlabs_tts', 'cartesia_tts'
+    #   'minimax_tts', 'elevenlabs_tts', 'cartesia_tts', 'chatterbox_tts', 'chatterbox_turbo_api_tts'
 
     siliconflow_tts:
       api_url: "https://api.siliconflow.cn/v1/audio/speech"
@@ -414,6 +417,35 @@ character_config:
       api_key: 'not-needed' # 如果服务器需要，可填写 API 密钥
       base_url: 'http://localhost:8880/v1' # TTS 服务器的基础 URL 地址
       file_extension: 'mp3' # 音频文件格式（'mp3' 或 'wav'）
+
+    chatterbox_tts:
+      api_url: 'http://127.0.0.1:8004/tts'
+      voice_mode: 'predefined' # 可选: 'predefined' 或 'clone'
+      predefined_voice_id: 'default_sample.wav' # voice_mode=predefined 时使用
+      reference_audio_filename: null # voice_mode=clone 时使用
+      output_format: 'wav' # 可选: 'wav'、'opus'、'mp3'
+      split_text: true
+      chunk_size: 120
+      temperature: null
+      exaggeration: null
+      cfg_weight: null
+      seed: null
+      speed_factor: null
+      language: null
+      timeout_sec: 300
+
+    chatterbox_turbo_api_tts:
+      api_url: 'https://api.segmind.com/v1/chatterbox-turbo-tts'
+      api_key: '' # 必填
+      reference_audio_url: '' # 必填
+      temperature: null
+      seed: null
+      min_p: null
+      top_p: null
+      top_k: null
+      repetition_penalty: null
+      norm_loudness: null
+      timeout_sec: 300
     # 详细文档见：https://platform.minimaxi.com/document/Announcement
     minimax_tts:
       group_id: '' # minimax 的 group_id

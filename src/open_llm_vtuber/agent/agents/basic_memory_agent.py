@@ -8,6 +8,7 @@ from typing import (
     Union,
     Optional,
 )
+import json
 from loguru import logger
 from .agent_interface import AgentInterface
 from ..output_types import SentenceOutput, DisplayText
@@ -34,6 +35,18 @@ class BasicMemoryAgent(AgentInterface):
     """Agent with basic chat memory and tool calling support."""
 
     _system: str = "You are a helpful assistant."
+    _OPENCLAW_ROUTER_SYSTEM_PROMPT: str = (
+        "You are a strict intent router for an OpenClaw tool bridge.\n"
+        "Return JSON only with this schema:\n"
+        "{\n"
+        '  "mode": "chat" | "openclaw_tool_call",\n'
+        '  "capability": "weather" | "discord_messages" | null,\n'
+        '  "reason": "short reason",\n'
+        '  "query": "query to send to selected tool or empty string"\n'
+        "}\n"
+        "Choose openclaw_tool_call only when the user explicitly asks for weather or discord messages.\n"
+        "For every other case choose chat."
+    )
 
     def __init__(
         self,
@@ -49,6 +62,8 @@ class BasicMemoryAgent(AgentInterface):
         tool_manager: Optional[ToolManager] = None,
         tool_executor: Optional[ToolExecutor] = None,
         mcp_prompt_string: str = "",
+        guidance_tool_router_enabled: bool = False,
+        guidance_tool_router_target_servers: Optional[List[str]] = None,
     ):
         """Initialize agent with LLM and configuration."""
         super().__init__()
@@ -67,6 +82,10 @@ class BasicMemoryAgent(AgentInterface):
         self._tool_executor = tool_executor
         self._mcp_prompt_string = mcp_prompt_string
         self._json_detector = StreamJSONDetector()
+        self._guidance_tool_router_enabled = guidance_tool_router_enabled
+        self._guidance_tool_router_target_servers = set(
+            s.lower() for s in (guidance_tool_router_target_servers or [])
+        )
 
         self._formatted_tools_openai = []
         self._formatted_tools_claude = []
@@ -111,10 +130,247 @@ class BasicMemoryAgent(AgentInterface):
 
         logger.info("BasicMemoryAgent initialized.")
 
+    def _extract_latest_user_text(self, messages: List[Dict[str, Any]]) -> str:
+        """Extract latest user text payload from messages."""
+        for message in reversed(messages):
+            if message.get("role") != "user":
+                continue
+
+            content = message.get("content")
+            if isinstance(content, str):
+                return content.strip()
+            if isinstance(content, list):
+                parts: List[str] = []
+                for item in content:
+                    if item.get("type") == "text":
+                        parts.append(item.get("text", ""))
+                return "\n".join(part for part in parts if part).strip()
+        return ""
+
+    def _categorize_openclaw_tools(
+        self, tools: List[Dict[str, Any]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Build tool buckets for openclaw capabilities."""
+        categorized: Dict[str, List[Dict[str, Any]]] = {
+            "weather": [],
+            "discord_messages": [],
+        }
+        if not tools:
+            return categorized
+
+        for tool in tools:
+            function_data = tool.get("function", {})
+            tool_name = str(function_data.get("name", "")).lower()
+            if not tool_name:
+                continue
+
+            related_server = ""
+            if self._tool_manager:
+                raw_tool = self._tool_manager.get_tool(function_data.get("name", ""))
+                if raw_tool and raw_tool.related_server:
+                    related_server = str(raw_tool.related_server).lower()
+
+            if self._guidance_tool_router_target_servers:
+                if related_server and (
+                    related_server not in self._guidance_tool_router_target_servers
+                ):
+                    continue
+
+            tool_desc = str(function_data.get("description", "")).lower()
+            tool_params = json.dumps(function_data.get("parameters", {})).lower()
+            haystack = f"{tool_name} {tool_desc} {tool_params}"
+
+            weather_keywords = [
+                "weather",
+                "forecast",
+                "temperature",
+                "humidity",
+                "wind",
+                "rain",
+                "snow",
+                "location",
+                "city",
+            ]
+            discord_keywords = [
+                "discord",
+                "guild",
+                "channel",
+                "message",
+                "dm",
+                "server",
+                "thread",
+            ]
+
+            if any(keyword in haystack for keyword in weather_keywords):
+                categorized["weather"].append(tool)
+            if any(keyword in haystack for keyword in discord_keywords):
+                categorized["discord_messages"].append(tool)
+
+            if related_server:
+                if "weather" in related_server:
+                    categorized["weather"].append(tool)
+                if "discord" in related_server:
+                    categorized["discord_messages"].append(tool)
+
+        for key in categorized:
+            deduped = []
+            seen = set()
+            for tool in categorized[key]:
+                tool_name = tool.get("function", {}).get("name")
+                if tool_name and tool_name not in seen:
+                    seen.add(tool_name)
+                    deduped.append(tool)
+            categorized[key] = deduped
+
+        return categorized
+
+    def _filter_tools_by_target_servers(
+        self, tools: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Return tools that belong to configured target servers."""
+        if not tools:
+            return []
+        if not self._guidance_tool_router_target_servers:
+            return tools
+
+        filtered = []
+        seen = set()
+        for tool in tools:
+            tool_name = tool.get("function", {}).get("name", "")
+            if not tool_name:
+                continue
+            raw_tool = self._tool_manager.get_tool(tool_name) if self._tool_manager else None
+            related_server = (
+                str(raw_tool.related_server).lower()
+                if raw_tool and raw_tool.related_server
+                else ""
+            )
+            if related_server in self._guidance_tool_router_target_servers:
+                if tool_name not in seen:
+                    seen.add(tool_name)
+                    filtered.append(tool)
+        return filtered
+
+    async def _run_openclaw_router(
+        self,
+        messages: List[Dict[str, Any]],
+        categorized_tools: Dict[str, List[Dict[str, Any]]],
+    ) -> Dict[str, Any]:
+        """Run a strict JSON router pass for chat vs openclaw tool call."""
+        if not isinstance(self._llm, OpenAICompatibleAsyncLLM):
+            return {"mode": "chat", "capability": None, "reason": "router_not_supported", "query": ""}
+
+        if not hasattr(self._llm, "client"):
+            return {"mode": "chat", "capability": None, "reason": "router_no_client", "query": ""}
+
+        user_text = self._extract_latest_user_text(messages)
+        available_tool_names = {
+            "weather": [
+                t.get("function", {}).get("name", "")
+                for t in categorized_tools.get("weather", [])
+            ],
+            "discord_messages": [
+                t.get("function", {}).get("name", "")
+                for t in categorized_tools.get("discord_messages", [])
+            ],
+        }
+
+        router_prompt = (
+            f"User message:\n{user_text}\n\n"
+            f"Available weather tools: {available_tool_names['weather']}\n"
+            f"Available discord tools: {available_tool_names['discord_messages']}\n"
+            "If capability is unavailable, choose mode='chat'."
+        )
+
+        response = await self._llm.client.chat.completions.create(
+            model=self._llm.model,
+            temperature=0,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "openclaw_router_decision",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "mode": {
+                                "type": "string",
+                                "enum": ["chat", "openclaw_tool_call"],
+                            },
+                            "capability": {
+                                "anyOf": [
+                                    {
+                                        "type": "string",
+                                        "enum": ["weather", "discord_messages"],
+                                    },
+                                    {"type": "null"},
+                                ]
+                            },
+                            "reason": {"type": "string"},
+                            "query": {"type": "string"},
+                        },
+                        "required": ["mode", "capability", "reason", "query"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            messages=[
+                {"role": "system", "content": self._OPENCLAW_ROUTER_SYSTEM_PROMPT},
+                {"role": "user", "content": router_prompt},
+            ],
+        )
+
+        router_raw = ""
+        if response.choices and response.choices[0].message:
+            router_raw = response.choices[0].message.content or ""
+
+        if not router_raw:
+            raise RuntimeError("OpenClaw router returned an empty response.")
+
+        try:
+            decision = json.loads(router_raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"OpenClaw router produced invalid JSON: {router_raw}") from exc
+
+        mode = decision.get("mode")
+        capability = decision.get("capability")
+        if mode not in {"chat", "openclaw_tool_call"}:
+            raise RuntimeError(f"OpenClaw router produced invalid mode: {mode}")
+        if capability not in {"weather", "discord_messages", None}:
+            raise RuntimeError(
+                f"OpenClaw router produced invalid capability: {capability}"
+            )
+        if mode == "openclaw_tool_call" and capability is None:
+            raise RuntimeError(
+                "OpenClaw router selected openclaw_tool_call but no capability."
+            )
+        return decision
+
     def _set_llm(self, llm: StatelessLLMInterface):
         """Set the LLM for chat completion."""
         self._llm = llm
         self.chat = self._chat_function_factory()
+
+    def set_runtime_tooling(
+        self,
+        tool_manager: Optional[ToolManager],
+        tool_executor: Optional[ToolExecutor],
+        mcp_prompt_string: str = "",
+    ) -> None:
+        """Bind per-session MCP tooling at runtime."""
+        self._tool_manager = tool_manager
+        self._tool_executor = tool_executor
+        self._mcp_prompt_string = mcp_prompt_string or ""
+
+        self._formatted_tools_openai = []
+        self._formatted_tools_claude = []
+        if self._tool_manager:
+            self._formatted_tools_openai = self._tool_manager.get_formatted_tools(
+                "OpenAI"
+            )
+            self._formatted_tools_claude = self._tool_manager.get_formatted_tools(
+                "Claude"
+            )
 
     def set_system(self, system: str):
         """Set the system prompt."""
@@ -404,12 +660,14 @@ class BasicMemoryAgent(AgentInterface):
         self,
         initial_messages: List[Dict[str, Any]],
         tools: List[Dict[str, Any]],
+        force_tool_first_turn: bool = False,
     ) -> AsyncIterator[Union[str, Dict[str, Any]]]:
         """Handle OpenAI interaction with tool support."""
         messages = initial_messages.copy()
         current_turn_text = ""
         pending_tool_calls: Union[List[ToolCallObject], List[Dict[str, Any]]] = []
         current_system_prompt = self._system
+        force_tool_choice_next = force_tool_first_turn
 
         while True:
             if self.prompt_mode_flag:
@@ -421,12 +679,20 @@ class BasicMemoryAgent(AgentInterface):
                     logger.warning("Prompt mode active but mcp_prompt_string is empty!")
                     current_system_prompt = self._system
                 tools_for_api = None
+                tool_choice_for_api = None
             else:
                 current_system_prompt = self._system
                 tools_for_api = tools
+                tool_choice_for_api = (
+                    "required" if force_tool_choice_next and tools_for_api else None
+                )
+                force_tool_choice_next = False
 
             stream = self._llm.chat_completion(
-                messages, current_system_prompt, tools=tools_for_api
+                messages,
+                current_system_prompt,
+                tools=tools_for_api,
+                tool_choice=tool_choice_for_api,
             )
             pending_tool_calls.clear()
             current_turn_text = ""
@@ -574,6 +840,11 @@ class BasicMemoryAgent(AgentInterface):
                 continue
 
             else:
+                if tool_choice_for_api == "required" and not pending_tool_calls:
+                    raise RuntimeError(
+                        "LLM did not emit a tool call while tool_choice='required'. "
+                        "The backend may not support enforced tool calling."
+                    )
                 if current_turn_text:
                     self._add_message(current_turn_text, "assistant")
                 return
@@ -622,6 +893,70 @@ class BasicMemoryAgent(AgentInterface):
                     logger.warning(
                         f"No tools available/formatted for '{tool_mode}' mode, despite MCP being enabled."
                     )
+                    if (
+                        self._guidance_tool_router_enabled
+                        and tool_mode == "OpenAI"
+                    ):
+                        raise RuntimeError(
+                            "MCP is enabled but no tools were loaded for OpenAI mode. "
+                            "Check mcp_servers.json and mcp_enabled_servers."
+                        )
+
+            if (
+                self._use_mcpp
+                and tool_mode == "OpenAI"
+                and self._guidance_tool_router_enabled
+                and tools
+            ):
+                categorized_tools = self._categorize_openclaw_tools(tools)
+                router_decision = await self._run_openclaw_router(
+                    messages, categorized_tools
+                )
+                logger.info(f"OpenClaw router decision: {router_decision}")
+
+                if router_decision.get("mode") == "openclaw_tool_call":
+                    capability = router_decision.get("capability")
+                    selected_tools = categorized_tools.get(capability, [])
+                    if not selected_tools:
+                        fallback_tools = self._filter_tools_by_target_servers(tools)
+                        if fallback_tools:
+                            logger.warning(
+                                f"No direct tool match for capability '{capability}'. Falling back to {len(fallback_tools)} target-server tool(s)."
+                            )
+                            selected_tools = fallback_tools
+                        else:
+                            raise RuntimeError(
+                                f"OpenClaw router selected capability '{capability}', but no matching tools are available."
+                            )
+
+                    logger.debug(
+                        f"Starting OpenAI tool loop via router with capability '{capability}' and {len(selected_tools)} tools."
+                    )
+                    async for output in self._openai_tool_interaction_loop(
+                        messages, selected_tools, force_tool_first_turn=True
+                    ):
+                        yield output
+                    return
+
+                logger.debug(
+                    "OpenClaw router selected normal chat path, running simple completion."
+                )
+                token_stream = self._llm.chat_completion(messages, self._system)
+                complete_response = ""
+                async for event in token_stream:
+                    text_chunk = ""
+                    if isinstance(event, dict) and event.get("type") == "text_delta":
+                        text_chunk = event.get("text", "")
+                    elif isinstance(event, str):
+                        text_chunk = event
+                    else:
+                        continue
+                    if text_chunk:
+                        yield text_chunk
+                        complete_response += text_chunk
+                if complete_response:
+                    self._add_message(complete_response, "assistant")
+                return
 
             if self._use_mcpp and tool_mode == "Claude":
                 logger.debug(

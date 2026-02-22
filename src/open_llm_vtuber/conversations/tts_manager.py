@@ -4,6 +4,7 @@ import re
 import uuid
 from datetime import datetime
 from typing import List, Optional, Dict
+import time
 from loguru import logger
 
 from ..agent.output_types import DisplayText, Actions
@@ -16,7 +17,7 @@ from .types import WebSocketSend
 class TTSTaskManager:
     """Manages TTS tasks and ensures ordered delivery to frontend while allowing parallel TTS generation"""
 
-    def __init__(self) -> None:
+    def __init__(self, turn_id: str | None = None) -> None:
         self.task_list: List[asyncio.Task] = []
         self._lock = asyncio.Lock()
         # Queue to store ordered payloads
@@ -26,6 +27,7 @@ class TTSTaskManager:
         # Counter for maintaining order
         self._sequence_counter = 0
         self._next_sequence_to_send = 0
+        self.turn_id = turn_id or uuid.uuid4().hex[:8]
 
     async def speak(
         self,
@@ -105,6 +107,9 @@ class TTSTaskManager:
                 # Send payloads in order
                 while self._next_sequence_to_send in buffered_payloads:
                     next_payload = buffered_payloads.pop(self._next_sequence_to_send)
+                    # Best-effort: stamp every outgoing payload with server send time.
+                    if isinstance(next_payload, dict) and "server_ts_ms" not in next_payload:
+                        next_payload["server_ts_ms"] = int(time.time() * 1000)
                     await websocket_send(json.dumps(next_payload))
                     self._next_sequence_to_send += 1
 
@@ -125,6 +130,14 @@ class TTSTaskManager:
             display_text=display_text,
             actions=actions,
         )
+        audio_payload["server_ts_ms"] = int(time.time() * 1000)
+        audio_payload["perf"] = {
+            "turn_id": self.turn_id,
+            "audio_seq": sequence_number,
+            "tts_gen_ms": 0.0,
+            "payload_prep_ms": 0.0,
+            "server_sent_ts_ms": audio_payload["server_ts_ms"],
+        }
         await self._payload_queue.put((audio_payload, sequence_number))
 
     async def _process_tts(
@@ -139,11 +152,32 @@ class TTSTaskManager:
         """Process TTS generation and queue the result for ordered delivery"""
         audio_file_path = None
         try:
+            t0 = time.perf_counter()
             audio_file_path = await self._generate_audio(tts_engine, tts_text)
+            tts_gen_ms = (time.perf_counter() - t0) * 1000
+
+            t1 = time.perf_counter()
             payload = prepare_audio_payload(
                 audio_path=audio_file_path,
                 display_text=display_text,
                 actions=actions,
+            )
+            payload_prep_ms = (time.perf_counter() - t1) * 1000
+
+            server_ts_ms = int(time.time() * 1000)
+            payload["server_ts_ms"] = server_ts_ms
+            payload["perf"] = {
+                "turn_id": self.turn_id,
+                "audio_seq": sequence_number,
+                "tts_gen_ms": round(tts_gen_ms, 1),
+                "payload_prep_ms": round(payload_prep_ms, 1),
+                "server_sent_ts_ms": server_ts_ms,
+            }
+
+            logger.info(
+                f"[PERF][TTS] turn={self.turn_id} seq={sequence_number} "
+                f"tts_ms={tts_gen_ms:.1f} payload_ms={payload_prep_ms:.1f} "
+                f"text_len={len(tts_text)}"
             )
             # Queue the payload with its sequence number
             await self._payload_queue.put((payload, sequence_number))
@@ -156,6 +190,16 @@ class TTSTaskManager:
                 display_text=display_text,
                 actions=actions,
             )
+            server_ts_ms = int(time.time() * 1000)
+            payload["server_ts_ms"] = server_ts_ms
+            payload["perf"] = {
+                "turn_id": self.turn_id,
+                "audio_seq": sequence_number,
+                "tts_gen_ms": None,
+                "payload_prep_ms": None,
+                "server_sent_ts_ms": server_ts_ms,
+                "error": str(e),
+            }
             await self._payload_queue.put((payload, sequence_number))
 
         finally:

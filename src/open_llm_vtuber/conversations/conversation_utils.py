@@ -3,6 +3,7 @@ import re
 from typing import Optional, Union, Any, List, Dict
 import numpy as np
 import json
+import time
 from loguru import logger
 
 from ..message_handler import message_handler
@@ -130,17 +131,31 @@ async def handle_audio_output(
     return full_response
 
 
-async def send_conversation_start_signals(websocket_send: WebSocketSend) -> None:
+async def send_conversation_start_signals(
+    websocket_send: WebSocketSend, turn_id: str | None = None
+) -> None:
     """Send initial conversation signals"""
+    server_ts_ms = int(time.time() * 1000)
     await websocket_send(
         json.dumps(
             {
                 "type": "control",
                 "text": "conversation-chain-start",
+                "server_ts_ms": server_ts_ms,
+                "turn_id": turn_id,
             }
         )
     )
-    await websocket_send(json.dumps({"type": "full-text", "text": "Thinking..."}))
+    await websocket_send(
+        json.dumps(
+            {
+                "type": "full-text",
+                "text": "Thinking...",
+                "server_ts_ms": server_ts_ms,
+                "turn_id": turn_id,
+            }
+        )
+    )
 
 
 async def process_user_input(
@@ -151,7 +166,9 @@ async def process_user_input(
     """Process user input, converting audio to text if needed"""
     if isinstance(user_input, np.ndarray):
         logger.info("Transcribing audio input...")
+        t0 = time.perf_counter()
         input_text = await asr_engine.async_transcribe_np(user_input)
+        logger.info(f"[PERF][ASR] transcribe_ms={(time.perf_counter()-t0)*1000:.1f}")
         await websocket_send(
             json.dumps({"type": "user-input-transcription", "text": input_text})
         )

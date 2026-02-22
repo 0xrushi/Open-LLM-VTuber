@@ -1,5 +1,6 @@
 import json
 import datetime
+import asyncio
 from loguru import logger
 from typing import (
     Dict,
@@ -23,6 +24,216 @@ class ToolExecutor:
     ):
         self._mcp_client = mcp_client
         self._tool_manager = tool_manager
+        self._background_tasks: set[asyncio.Task] = set()
+
+    def _extract_text_from_content_items(
+        self, content_items: List[Dict[str, Any]]
+    ) -> str:
+        """Extract first text payload from MCP content items."""
+        for item in content_items:
+            if item.get("type") == "text":
+                return item.get("text", "")
+        return ""
+
+    async def _send_ws_event(self, payload: Dict[str, Any]) -> None:
+        """Best-effort websocket push using MCP client callback."""
+        send_text = getattr(self._mcp_client, "_send_text", None)
+        if not send_text:
+            return
+        try:
+            await send_text(json.dumps(payload))
+        except Exception as exc:
+            logger.error(f"Failed to send websocket event: {exc}")
+
+    async def _speak_background_result(self, text: str) -> None:
+        """Best-effort background TTS callback for async tool completion."""
+        speak_cb = getattr(self._mcp_client, "_background_result_handler", None)
+        if not speak_cb:
+            return
+        try:
+            await speak_cb(text)
+        except Exception as exc:
+            logger.error(f"Failed background result speech callback: {exc}")
+
+    async def _poll_openclaw_async_task(
+        self,
+        server_name: str,
+        origin_tool_name: str,
+        origin_tool_id: str,
+        task_id: str,
+        poll_interval_sec: float = 5.0,
+        timeout_sec: float = 300.0,
+    ) -> None:
+        """Poll openclaw_task_status in background and push completion to UI."""
+        deadline = asyncio.get_running_loop().time() + timeout_sec
+
+        while asyncio.get_running_loop().time() < deadline:
+            try:
+                result = await self._mcp_client.call_tool(
+                    server_name=server_name,
+                    tool_name="openclaw_task_status",
+                    tool_args={"task_id": task_id},
+                )
+                content_items = result.get("content_items", [])
+                text_payload = self._extract_text_from_content_items(content_items)
+                if not text_payload:
+                    await asyncio.sleep(poll_interval_sec)
+                    continue
+
+                try:
+                    status_obj = json.loads(text_payload)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        f"openclaw_task_status returned non-JSON text: {text_payload[:200]}"
+                    )
+                    await asyncio.sleep(poll_interval_sec)
+                    continue
+
+                status = str(status_obj.get("status", "")).lower()
+
+                if status == "completed":
+                    result_text = str(status_obj.get("result", "")).strip()
+                    await self._send_ws_event(
+                        {
+                            "type": "tool_call_status",
+                            "tool_id": origin_tool_id,
+                            "tool_name": origin_tool_name,
+                            "status": "completed",
+                            "content": result_text
+                            if result_text
+                            else f"OpenClaw async task {task_id} completed.",
+                            "timestamp": datetime.datetime.now(
+                                datetime.timezone.utc
+                            ).isoformat()
+                            + "Z",
+                        }
+                    )
+                    if result_text:
+                        speak_task = asyncio.create_task(
+                            self._speak_background_result(result_text)
+                        )
+                        self._background_tasks.add(speak_task)
+                        speak_task.add_done_callback(self._background_tasks.discard)
+                    return
+
+                if status in {"failed", "cancelled"}:
+                    error_text = str(
+                        status_obj.get("error", f"Task ended with status '{status}'")
+                    )
+                    await self._send_ws_event(
+                        {
+                            "type": "tool_call_status",
+                            "tool_id": origin_tool_id,
+                            "tool_name": origin_tool_name,
+                            "status": "error",
+                            "content": f"OpenClaw async task {task_id}: {error_text}",
+                            "timestamp": datetime.datetime.now(
+                                datetime.timezone.utc
+                            ).isoformat()
+                            + "Z",
+                        }
+                    )
+                    return
+
+            except Exception as exc:
+                logger.error(f"Error polling OpenClaw async task {task_id}: {exc}")
+
+            await asyncio.sleep(poll_interval_sec)
+
+        await self._send_ws_event(
+            {
+                "type": "tool_call_status",
+                "tool_id": origin_tool_id,
+                "tool_name": origin_tool_name,
+                "status": "error",
+                "content": f"OpenClaw async task {task_id} timed out after {int(timeout_sec)}s.",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+                + "Z",
+            }
+        )
+
+    async def _run_openclaw_chat_async_nonblocking(
+        self,
+        tool_name: str,
+        tool_id: str,
+        tool_input: Any,
+    ) -> tuple[bool, str, Dict[str, Any], List[Dict[str, Any]]]:
+        """Execute openclaw_chat asynchronously and return immediately."""
+        tool_info = self._tool_manager.get_tool(tool_name)
+        if not tool_info or not tool_info.related_server:
+            return (
+                True,
+                f"Error: Tool '{tool_name}' has no configured server.",
+                {},
+                [{"type": "error", "text": f"Tool '{tool_name}' has no server."}],
+            )
+
+        message = ""
+        if isinstance(tool_input, dict):
+            message = str(tool_input.get("message", "")).strip()
+        if not message:
+            return (
+                True,
+                "Error: openclaw_chat requires a non-empty 'message'.",
+                {},
+                [{"type": "error", "text": "Missing message for openclaw_chat."}],
+            )
+
+        async_result = await self._mcp_client.call_tool(
+            server_name=tool_info.related_server,
+            tool_name="openclaw_chat_async",
+            tool_args={"message": message},
+        )
+        content_items = async_result.get("content_items", [])
+        text_payload = self._extract_text_from_content_items(content_items)
+        if not text_payload:
+            return (
+                True,
+                "Error: openclaw_chat_async returned empty response.",
+                async_result.get("metadata", {}),
+                [{"type": "error", "text": "openclaw_chat_async returned empty response."}],
+            )
+
+        try:
+            parsed = json.loads(text_payload)
+        except json.JSONDecodeError as exc:
+            return (
+                True,
+                f"Error: Failed to parse openclaw_chat_async response: {text_payload}",
+                async_result.get("metadata", {}),
+                [{"type": "error", "text": f"Invalid async response: {exc}"}],
+            )
+
+        task_id = parsed.get("task_id")
+        if not task_id:
+            return (
+                True,
+                f"Error: openclaw_chat_async did not return task_id: {text_payload}",
+                async_result.get("metadata", {}),
+                [{"type": "error", "text": "Missing task_id from openclaw_chat_async."}],
+            )
+
+        poll_task = asyncio.create_task(
+            self._poll_openclaw_async_task(
+                server_name=tool_info.related_server,
+                origin_tool_name=tool_name,
+                origin_tool_id=tool_id,
+                task_id=task_id,
+            )
+        )
+        self._background_tasks.add(poll_task)
+        poll_task.add_done_callback(self._background_tasks.discard)
+
+        queued_text = (
+            f"OpenClaw task queued (task_id={task_id}). "
+            "Running in background; I will post the final result when it is ready."
+        )
+        return (
+            False,
+            queued_text,
+            async_result.get("metadata", {}),
+            [{"type": "text", "text": queued_text}],
+        )
 
     def parse_tool_call(self, call: Union[Dict[str, Any], ToolCallObject]) -> tuple:
         """Parse tool call from different formats.
@@ -215,12 +426,27 @@ class ToolExecutor:
             }
 
             # Execute the tool
-            (
-                is_error,
-                text_content,
-                metadata,
-                content_items,
-            ) = await self.run_single_tool(tool_name, tool_id, tool_input)
+            tool_info = self._tool_manager.get_tool(tool_name)
+            if (
+                tool_name == "openclaw_chat"
+                and tool_info
+                and str(getattr(tool_info, "related_server", "")).lower() == "openclaw"
+            ):
+                (
+                    is_error,
+                    text_content,
+                    metadata,
+                    content_items,
+                ) = await self._run_openclaw_chat_async_nonblocking(
+                    tool_name, tool_id, tool_input
+                )
+            else:
+                (
+                    is_error,
+                    text_content,
+                    metadata,
+                    content_items,
+                ) = await self.run_single_tool(tool_name, tool_id, tool_input)
 
             # Determine content for status update and LLM result format
             status_content = text_content  # Default to text content

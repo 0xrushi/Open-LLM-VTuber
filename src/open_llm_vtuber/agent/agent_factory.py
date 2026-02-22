@@ -83,6 +83,12 @@ class AgentFactory:
                 tool_manager=tool_manager,
                 tool_executor=tool_executor,
                 mcp_prompt_string=mcp_prompt_string,
+                guidance_tool_router_enabled=basic_memory_settings.get(
+                    "guidance_tool_router_enabled", False
+                ),
+                guidance_tool_router_target_servers=basic_memory_settings.get(
+                    "guidance_tool_router_target_servers", []
+                ),
             )
 
         elif conversation_agent_choice == "mem0_agent":

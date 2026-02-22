@@ -1,6 +1,8 @@
 from typing import Union, List, Dict, Any, Optional
 import asyncio
 import json
+import time
+import uuid
 from loguru import logger
 import numpy as np
 
@@ -45,14 +47,19 @@ async def process_single_conversation(
     Returns:
         str: Complete response text
     """
+    turn_id = uuid.uuid4().hex[:8]
+    chain_t0 = time.perf_counter()
     # Create TTSTaskManager for this conversation
-    tts_manager = TTSTaskManager()
+    tts_manager = TTSTaskManager(turn_id=turn_id)
     full_response = ""  # Initialize full_response here
+
+    if hasattr(context, "mark_turn_start"):
+        context.mark_turn_start()
 
     try:
         # Send initial signals
-        await send_conversation_start_signals(websocket_send)
-        logger.info(f"New Conversation Chain {session_emoji} started!")
+        await send_conversation_start_signals(websocket_send, turn_id=turn_id)
+        logger.info(f"New Conversation Chain {session_emoji} started! turn={turn_id}")
 
         # Process user input
         input_text = await process_user_input(
@@ -86,10 +93,25 @@ async def process_single_conversation(
             logger.info(f"With {len(images)} images")
 
         try:
+            if hasattr(context.agent_engine, "set_runtime_tooling"):
+                context.agent_engine.set_runtime_tooling(
+                    tool_manager=context.tool_manager,
+                    tool_executor=context.tool_executor,
+                    mcp_prompt_string=context.mcp_prompt,
+                )
+
             # agent.chat yields Union[SentenceOutput, Dict[str, Any]]
+            llm_t0 = time.perf_counter()
+            first_agent_item_ms: float | None = None
             agent_output_stream = context.agent_engine.chat(batch_input)
 
             async for output_item in agent_output_stream:
+                if first_agent_item_ms is None:
+                    first_agent_item_ms = (time.perf_counter() - llm_t0) * 1000
+                    logger.info(
+                        f"[PERF][AGENT] turn={turn_id} first_item_ms={first_agent_item_ms:.1f}"
+                    )
+
                 if (
                     isinstance(output_item, dict)
                     and output_item.get("type") == "tool_call_status"
@@ -159,6 +181,9 @@ async def process_single_conversation(
             )
             logger.info(f"AI response: {full_response}")
 
+        logger.info(
+            f"[PERF][TURN] turn={turn_id} total_ms={(time.perf_counter()-chain_t0)*1000:.1f}"
+        )
         return full_response  # Return accumulated full_response
 
     except asyncio.CancelledError:
@@ -171,4 +196,6 @@ async def process_single_conversation(
         )
         raise
     finally:
+        if hasattr(context, "mark_turn_end"):
+            context.mark_turn_end()
         cleanup_conversation(tts_manager, session_emoji)

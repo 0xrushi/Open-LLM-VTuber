@@ -5,6 +5,7 @@ import json
 from enum import Enum
 import numpy as np
 from loguru import logger
+import time
 
 from .service_context import ServiceContext
 from .chat_group import (
@@ -93,6 +94,8 @@ class WebSocketHandler:
             "switch-config": self._handle_config_switch,
             "fetch-backgrounds": self._handle_fetch_backgrounds,
             "audio-play-start": self._handle_audio_play_start,
+            "frontend-playback-complete": self._handle_frontend_playback_complete,
+            "client-perf": self._handle_client_perf,
             "request-init-config": self._handle_init_config_request,
             "heartbeat": self._handle_heartbeat,
         }
@@ -591,6 +594,16 @@ class WebSocketHandler:
         """
         Handle audio playback start notification
         """
+        perf = data.get("perf") if isinstance(data, dict) else None
+        if isinstance(perf, dict):
+            server_sent_ts_ms = perf.get("server_sent_ts_ms")
+            if isinstance(server_sent_ts_ms, (int, float)):
+                ui_start_delay_ms = int(time.time() * 1000 - server_sent_ts_ms)
+                logger.info(
+                    f"[PERF][UI] audio_play_start turn={perf.get('turn_id')} "
+                    f"seq={perf.get('audio_seq')} delay_ms={ui_start_delay_ms}"
+                )
+
         group_members = self.chat_group_manager.get_group_members(client_uid)
         if len(group_members) > 1:
             display_text = data.get("display_text")
@@ -604,6 +617,38 @@ class WebSocketHandler:
                 await self.broadcast_to_group(
                     group_members, silent_payload, exclude_uid=client_uid
                 )
+
+    async def _handle_frontend_playback_complete(
+        self, websocket: WebSocket, client_uid: str, data: WSMessage
+    ) -> None:
+        perf = data.get("perf") if isinstance(data, dict) else None
+        if isinstance(perf, dict):
+            server_sent_ts_ms = perf.get("server_sent_ts_ms")
+            if isinstance(server_sent_ts_ms, (int, float)):
+                ui_done_delay_ms = int(time.time() * 1000 - server_sent_ts_ms)
+                logger.info(
+                    f"[PERF][UI] playback_complete turn={perf.get('turn_id')} "
+                    f"seq={perf.get('audio_seq')} delay_ms={ui_done_delay_ms}"
+                )
+
+    async def _handle_client_perf(
+        self, websocket: WebSocket, client_uid: str, data: WSMessage
+    ) -> None:
+        # Client-side probes injected via frontend/perf.js (or custom clients).
+        perf = data.get("perf") if isinstance(data, dict) else None
+        if not isinstance(perf, dict):
+            return
+
+        event = data.get("event") or perf.get("event")
+        server_sent_ts_ms = perf.get("server_sent_ts_ms")
+        if isinstance(server_sent_ts_ms, (int, float)):
+            delay_ms = int(time.time() * 1000 - server_sent_ts_ms)
+        else:
+            delay_ms = None
+        logger.info(
+            f"[PERF][CLIENT] event={event} turn={perf.get('turn_id')} "
+            f"seq={perf.get('audio_seq')} delay_ms={delay_ms}"
+        )
 
     async def _handle_group_info(
         self, websocket: WebSocket, client_uid: str, data: WSMessage
@@ -627,6 +672,7 @@ class WebSocketHandler:
                     "conf_name": context.character_config.conf_name,
                     "conf_uid": context.character_config.conf_uid,
                     "client_uid": client_uid,
+                    "server_ts_ms": int(time.time() * 1000),
                 }
             )
         )

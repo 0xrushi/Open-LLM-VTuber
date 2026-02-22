@@ -1,7 +1,7 @@
 """MCP Client for Open-LLM-Vtuber."""
 
 from contextlib import AsyncExitStack
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List, Callable, Awaitable
 from loguru import logger
 from datetime import timedelta
 
@@ -24,6 +24,7 @@ class MCPClient:
         server_registery: ServerRegistry,
         send_text: Callable = None,
         client_uid: str = None,
+        background_result_handler: Callable[[str], Awaitable[None]] = None,
     ) -> None:
         """Initialize the MCP Client."""
         self.exit_stack: AsyncExitStack = AsyncExitStack()
@@ -31,6 +32,7 @@ class MCPClient:
         self._list_tools_cache: Dict[str, List[Tool]] = {}  # Cache for list_tools
         self._send_text: Callable = send_text
         self._client_uid: str = client_uid
+        self._background_result_handler = background_result_handler
 
         if isinstance(server_registery, ServerRegistry):
             self.server_registery = server_registery

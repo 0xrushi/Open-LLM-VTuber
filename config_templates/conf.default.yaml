@@ -68,6 +68,9 @@ character_config:
         # 'Plus' means that it has the ability to call tools by using OpenAI API.
         use_mcpp: True
         mcp_enabled_servers: ["time", "ddg-search"] # Enabled MCP servers
+        # Guidance-style strict routing: model decides chat vs openclaw tool call.
+        guidance_tool_router_enabled: False
+        guidance_tool_router_target_servers: [] # e.g. ["weather", "discord"]
 
       letta_agent:
         host: 'localhost' # Host address
@@ -274,7 +277,7 @@ character_config:
     #   'azure_tts', 'pyttsx3_tts', 'edge_tts', 'bark_tts',
     #   'cosyvoice_tts', 'melo_tts', 'coqui_tts', 'piper_tts',
     #   'fish_api_tts', 'x_tts', 'gpt_sovits_tts', 'sherpa_onnx_tts'
-    #   'minimax_tts', 'elevenlabs_tts', 'cartesia_tts'
+    #   'minimax_tts', 'elevenlabs_tts', 'cartesia_tts', 'chatterbox_tts', 'chatterbox_turbo_api_tts'
 
     azure_tts:
       api_key: 'azure-api-key'
@@ -418,6 +421,35 @@ character_config:
       api_key: 'not-needed' # API key if required by the server
       base_url: 'http://localhost:8880/v1' # Base URL of the TTS server
       file_extension: 'mp3' # Audio file format ('mp3' or 'wav')
+
+    chatterbox_tts:
+      api_url: 'http://127.0.0.1:8004/tts'
+      voice_mode: 'predefined' # 'predefined' or 'clone'
+      predefined_voice_id: 'default_sample.wav' # used when voice_mode=predefined
+      reference_audio_filename: null # used when voice_mode=clone
+      output_format: 'wav' # 'wav', 'opus', or 'mp3'
+      split_text: true
+      chunk_size: 120
+      temperature: null
+      exaggeration: null
+      cfg_weight: null
+      seed: null
+      speed_factor: null
+      language: null
+      timeout_sec: 300
+
+    chatterbox_turbo_api_tts:
+      api_url: 'https://api.segmind.com/v1/chatterbox-turbo-tts'
+      api_key: '' # required
+      reference_audio_url: '' # required
+      temperature: null
+      seed: null
+      min_p: null
+      top_p: null
+      top_k: null
+      repetition_penalty: null
+      norm_loudness: null
+      timeout_sec: 300
 
     # For more details, see: https://platform.minimaxi.com/document/Announcement
     minimax_tts:

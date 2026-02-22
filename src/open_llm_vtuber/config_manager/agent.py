@@ -30,9 +30,15 @@ class BasicMemoryAgentConfig(I18nMixin, BaseModel):
     ] = Field(..., alias="llm_provider")
 
     faster_first_response: Optional[bool] = Field(True, alias="faster_first_response")
-    segment_method: Literal["regex", "pysbd"] = Field("pysbd", alias="segment_method")
+    segment_method: Literal["regex", "pysbd", "none"] = Field("pysbd", alias="segment_method")
     use_mcpp: Optional[bool] = Field(False, alias="use_mcpp")
     mcp_enabled_servers: Optional[List[str]] = Field([], alias="mcp_enabled_servers")
+    guidance_tool_router_enabled: Optional[bool] = Field(
+        False, alias="guidance_tool_router_enabled"
+    )
+    guidance_tool_router_target_servers: Optional[List[str]] = Field(
+        default_factory=list, alias="guidance_tool_router_target_servers"
+    )
 
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
         "llm_provider": Description(
@@ -44,8 +50,8 @@ class BasicMemoryAgentConfig(I18nMixin, BaseModel):
             zh="是否在第一句回应时遇上逗号就直接生成音频以减少首句延迟（默认：True）",
         ),
         "segment_method": Description(
-            en="Method for segmenting sentences: 'regex' or 'pysbd' (default: 'pysbd')",
-            zh="分割句子的方法：'regex' 或 'pysbd'（默认：'pysbd'）",
+            en="Method for segmenting sentences: 'regex', 'pysbd', or 'none' for no segmentation (default: 'pysbd')",
+            zh="分割句子的方法：'regex'、'pysbd' 或 'none'（不分割）（默认：'pysbd'）",
         ),
         "use_mcpp": Description(
             en="Whether to use MCP (Model Context Protocol) for the agent (default: True)",
@@ -54,6 +60,14 @@ class BasicMemoryAgentConfig(I18nMixin, BaseModel):
         "mcp_enabled_servers": Description(
             en="List of MCP servers to enable for the agent",
             zh="为智能体启用 MCP 服务器列表",
+        ),
+        "guidance_tool_router_enabled": Description(
+            en="Enable a strict JSON router that decides chat vs OpenClaw-style tool calls",
+            zh="启用严格 JSON 路由器，在普通对话与 OpenClaw 风格工具调用之间进行决策",
+        ),
+        "guidance_tool_router_target_servers": Description(
+            en="Optional MCP server allow-list for the OpenClaw router (example: ['weather', 'discord'])",
+            zh="OpenClaw 路由器可选 MCP 服务器白名单（例如 ['weather', 'discord']）",
         ),
     }
 
@@ -155,7 +169,7 @@ class LettaConfig(I18nMixin, BaseModel):
     port: int = Field(8283, alias="port")
     id: str = Field(..., alias="id")
     faster_first_response: Optional[bool] = Field(True, alias="faster_first_response")
-    segment_method: Literal["regex", "pysbd"] = Field("pysbd", alias="segment_method")
+    segment_method: Literal["regex", "pysbd", "none"] = Field("pysbd", alias="segment_method")
 
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
         "host": Description(
@@ -220,7 +234,7 @@ class AgentConfig(I18nMixin, BaseModel):
             zh="是否在第一句回应时遇上逗号就直接生成音频以减少首句延迟（默认：True）",
         ),
         "segment_method": Description(
-            en="Method for segmenting sentences: 'regex' or 'pysbd' (default: 'pysbd')",
-            zh="分割句子的方法：'regex' 或 'pysbd'（默认：'pysbd'）",
+            en="Method for segmenting sentences: 'regex', 'pysbd', or 'none' for no segmentation (default: 'pysbd')",
+            zh="分割句子的方法：'regex'、'pysbd' 或 'none'（不分割）（默认：'pysbd'）",
         ),
     }

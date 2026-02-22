@@ -4,6 +4,8 @@ endpoints for language generation.
 """
 
 from typing import AsyncIterator, List, Dict, Any
+import time
+import uuid
 from openai import (
     AsyncStream,
     AsyncOpenAI,
@@ -62,6 +64,7 @@ class AsyncLLM(StatelessLLMInterface):
         messages: List[Dict[str, Any]],
         system: str = None,
         tools: List[Dict[str, Any]] | NotGiven = NOT_GIVEN,
+        tool_choice: Any | NotGiven = NOT_GIVEN,
     ) -> AsyncIterator[str | List[ChoiceDeltaToolCall]]:
         """
         Generates a chat completion using the OpenAI API asynchronously.
@@ -84,6 +87,10 @@ class AsyncLLM(StatelessLLMInterface):
         # Tool call related state variables
         accumulated_tool_calls = {}
         in_tool_call = False
+        req_id = uuid.uuid4().hex[:8]
+        t0 = time.perf_counter()
+        first_token_ms: float | None = None
+        chunks = 0
 
         try:
             # If system prompt is provided, add it to the messages
@@ -96,6 +103,11 @@ class AsyncLLM(StatelessLLMInterface):
             logger.debug(f"Messages: {messages_with_system}")
 
             available_tools = tools if self.support_tools else NOT_GIVEN
+            available_tool_choice = (
+                tool_choice
+                if self.support_tools and available_tools is not NOT_GIVEN
+                else NOT_GIVEN
+            )
 
             stream: AsyncStream[
                 ChatCompletionChunk
@@ -105,12 +117,14 @@ class AsyncLLM(StatelessLLMInterface):
                 stream=True,
                 temperature=self.temperature,
                 tools=available_tools,
+                tool_choice=available_tool_choice,
             )
             logger.debug(
-                f"Tool Support: {self.support_tools}, Available tools: {available_tools}"
+                f"Tool Support: {self.support_tools}, Available tools: {available_tools}, tool_choice={available_tool_choice}"
             )
 
             async for chunk in stream:
+                chunks += 1
                 # Guard against chunks with missing choices field (e.g., from OpenWebUI)
                 if not chunk.choices:
                     continue
@@ -187,6 +201,13 @@ class AsyncLLM(StatelessLLMInterface):
                     continue
                 elif chunk.choices[0].delta.content is None:
                     chunk.choices[0].delta.content = ""
+
+                if first_token_ms is None:
+                    first_token_ms = (time.perf_counter() - t0) * 1000
+                    logger.info(
+                        f"[PERF][LLM] req={req_id} first_token_ms={first_token_ms:.1f} "
+                        f"base_url={self.base_url} model={self.model}"
+                    )
                 yield chunk.choices[0].delta.content
 
             # If stream ends while still in a tool call, make sure to yield the tool call
@@ -200,6 +221,12 @@ class AsyncLLM(StatelessLLMInterface):
                 ]
 
                 yield complete_tool_calls
+
+            total_ms = (time.perf_counter() - t0) * 1000
+            logger.info(
+                f"[PERF][LLM] req={req_id} total_ms={total_ms:.1f} chunks={chunks} "
+                f"base_url={self.base_url} model={self.model}"
+            )
 
         except APIConnectionError as e:
             logger.error(

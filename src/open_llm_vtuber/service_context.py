@@ -1,5 +1,7 @@
 import os
 import json
+import asyncio
+import uuid
 from typing import Callable
 from loguru import logger
 from fastapi import WebSocket
@@ -71,6 +73,9 @@ class ServiceContext:
 
         self.send_text: Callable = None
         self.client_uid: str = None
+        self._active_turns: int = 0
+        self._turn_idle_event: asyncio.Event = asyncio.Event()
+        self._turn_idle_event.set()
 
     def __str__(self):
         return (
@@ -157,7 +162,10 @@ class ServiceContext:
             # 4. Initialize MCPClient
             if self.mcp_server_registery:
                 self.mcp_client = MCPClient(
-                    self.mcp_server_registery, self.send_text, self.client_uid
+                    self.mcp_server_registery,
+                    self.send_text,
+                    self.client_uid,
+                    background_result_handler=self._speak_background_tool_result,
                 )
                 logger.info("MCPClient initialized for this session.")
             else:
@@ -185,6 +193,68 @@ class ServiceContext:
         else:
             logger.debug(
                 "MCP components not initialized (use_mcpp is False or no enabled servers)."
+            )
+
+    async def _speak_background_tool_result(self, text: str) -> None:
+        """Speak async MCP tool result directly through the current client TTS pipeline."""
+        normalized = (text or "").strip()
+        if not normalized:
+            return
+        await self.wait_until_turn_idle()
+        if not self.send_text:
+            logger.warning("Cannot speak background tool result: send_text unavailable.")
+            return
+        if not self.tts_engine:
+            logger.warning("Cannot speak background tool result: TTS engine unavailable.")
+            return
+
+        try:
+            from .agent.output_types import DisplayText, Actions
+            from .conversations.tts_manager import TTSTaskManager
+
+            display_text = DisplayText(
+                text=normalized,
+                name=self.character_config.character_name
+                if self.character_config
+                else "AI",
+                avatar=self.character_config.avatar if self.character_config else None,
+            )
+            tts_manager = TTSTaskManager(turn_id=f"bg_{uuid.uuid4().hex[:8]}")
+
+            await tts_manager.speak(
+                tts_text=normalized,
+                display_text=display_text,
+                actions=Actions(expressions=["neutral"]),
+                live2d_model=self.live2d_model,
+                tts_engine=self.tts_engine,
+                websocket_send=self.send_text,
+            )
+            if tts_manager.task_list:
+                await asyncio.gather(*tts_manager.task_list)
+                await self.send_text(json.dumps({"type": "backend-synth-complete"}))
+            await self.send_text(json.dumps({"type": "force-new-message"}))
+            tts_manager.clear()
+        except Exception as exc:
+            logger.exception(f"Failed to speak background tool result: {exc}")
+
+    def mark_turn_start(self) -> None:
+        """Mark the beginning of an active conversation turn for this client context."""
+        self._active_turns += 1
+        self._turn_idle_event.clear()
+
+    def mark_turn_end(self) -> None:
+        """Mark the end of an active conversation turn for this client context."""
+        self._active_turns = max(0, self._active_turns - 1)
+        if self._active_turns == 0:
+            self._turn_idle_event.set()
+
+    async def wait_until_turn_idle(self, timeout_sec: float = 60.0) -> None:
+        """Wait until no active conversation turn is running for this client context."""
+        try:
+            await asyncio.wait_for(self._turn_idle_event.wait(), timeout=timeout_sec)
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Timeout waiting for active turn to finish for client {self.client_uid}."
             )
 
     async def close(self):

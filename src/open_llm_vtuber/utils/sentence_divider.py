@@ -408,6 +408,10 @@ class SentenceDivider:
         This is now an async generator.
         It consumes processed parts from self._buffer.
         """
+        # If segmentation is disabled, don't yield anything until flush
+        if self.segment_method == "none":
+            return
+
         processed_something = True  # Flag to loop until no more processing can be done
         while processed_something:
             processed_something = False
@@ -597,7 +601,10 @@ class SentenceDivider:
 
     def _segment_text(self, text: str) -> Tuple[List[str], str]:
         """Segment text using the configured method"""
-        if self.segment_method == "regex":
+        if self.segment_method == "none":
+            # No segmentation - return entire text as one sentence
+            return [], text  # Empty list, keep all in buffer until flush
+        elif self.segment_method == "regex":
             return segment_text_by_regex(text)
         return segment_text_by_pysbd(text)
 
