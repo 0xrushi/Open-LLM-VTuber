@@ -29,6 +29,7 @@ from ...mcpp.tool_manager import ToolManager
 from ...mcpp.json_detector import StreamJSONDetector
 from ...mcpp.types import ToolCallObject
 from ...mcpp.tool_executor import ToolExecutor
+from ...vision.vision_interface import VisionInterface
 
 
 class BasicMemoryAgent(AgentInterface):
@@ -64,6 +65,7 @@ class BasicMemoryAgent(AgentInterface):
         mcp_prompt_string: str = "",
         guidance_tool_router_enabled: bool = False,
         guidance_tool_router_target_servers: Optional[List[str]] = None,
+        vision_engine: Optional[VisionInterface] = None,
     ):
         """Initialize agent with LLM and configuration."""
         super().__init__()
@@ -86,6 +88,7 @@ class BasicMemoryAgent(AgentInterface):
         self._guidance_tool_router_target_servers = set(
             s.lower() for s in (guidance_tool_router_target_servers or [])
         )
+        self._vision_engine = vision_engine
 
         self._formatted_tools_openai = []
         self._formatted_tools_claude = []
@@ -239,7 +242,9 @@ class BasicMemoryAgent(AgentInterface):
             tool_name = tool.get("function", {}).get("name", "")
             if not tool_name:
                 continue
-            raw_tool = self._tool_manager.get_tool(tool_name) if self._tool_manager else None
+            raw_tool = (
+                self._tool_manager.get_tool(tool_name) if self._tool_manager else None
+            )
             related_server = (
                 str(raw_tool.related_server).lower()
                 if raw_tool and raw_tool.related_server
@@ -258,10 +263,20 @@ class BasicMemoryAgent(AgentInterface):
     ) -> Dict[str, Any]:
         """Run a strict JSON router pass for chat vs openclaw tool call."""
         if not isinstance(self._llm, OpenAICompatibleAsyncLLM):
-            return {"mode": "chat", "capability": None, "reason": "router_not_supported", "query": ""}
+            return {
+                "mode": "chat",
+                "capability": None,
+                "reason": "router_not_supported",
+                "query": "",
+            }
 
         if not hasattr(self._llm, "client"):
-            return {"mode": "chat", "capability": None, "reason": "router_no_client", "query": ""}
+            return {
+                "mode": "chat",
+                "capability": None,
+                "reason": "router_no_client",
+                "query": "",
+            }
 
         user_text = self._extract_latest_user_text(messages)
         available_tool_names = {
@@ -330,7 +345,9 @@ class BasicMemoryAgent(AgentInterface):
         try:
             decision = json.loads(router_raw)
         except json.JSONDecodeError as exc:
-            raise RuntimeError(f"OpenClaw router produced invalid JSON: {router_raw}") from exc
+            raise RuntimeError(
+                f"OpenClaw router produced invalid JSON: {router_raw}"
+            ) from exc
 
         mode = decision.get("mode")
         capability = decision.get("capability")
@@ -478,7 +495,12 @@ class BasicMemoryAgent(AgentInterface):
         )
         logger.info(f"Handled interrupt with role '{interrupt_role}'.")
 
-    def _to_text_prompt(self, input_data: BatchInput) -> str:
+    def _to_text_prompt(
+        self,
+        input_data: BatchInput,
+        vision_summary: str = "",
+        include_image_marker: bool = True,
+    ) -> str:
         """Format input data to text prompt."""
         message_parts = []
 
@@ -490,20 +512,49 @@ class BasicMemoryAgent(AgentInterface):
                     f"[User shared content from clipboard: {text_data.content}]"
                 )
 
-        if input_data.images:
+        if vision_summary:
+            message_parts.append(f"\n[Vision context]\n{vision_summary}")
+        elif input_data.images and include_image_marker:
             message_parts.append("\n[User has also provided images]")
 
         return "\n".join(message_parts).strip()
 
-    def _to_messages(self, input_data: BatchInput) -> List[Dict[str, Any]]:
+    async def _to_messages(
+        self,
+        input_data: BatchInput,
+    ) -> List[Dict[str, Any]]:
         """Prepare messages for LLM API call."""
         messages = self._memory.copy()
         user_content = []
-        text_prompt = self._to_text_prompt(input_data)
+        use_vision_engine = bool(self._vision_engine and input_data.images)
+        base_text_prompt = self._to_text_prompt(
+            input_data,
+            include_image_marker=not use_vision_engine,
+        )
+        vision_summary = ""
+
+        if use_vision_engine:
+            try:
+                vision_summary = await self._vision_engine.async_describe(
+                    input_data.images,
+                    base_text_prompt,
+                )
+                if not vision_summary:
+                    logger.warning(
+                        "Vision model returned empty output for current turn."
+                    )
+            except Exception as exc:
+                logger.error(f"Vision model failed for current turn: {exc}")
+
+        text_prompt = self._to_text_prompt(
+            input_data,
+            vision_summary=vision_summary,
+            include_image_marker=not use_vision_engine,
+        )
         if text_prompt:
             user_content.append({"type": "text", "text": text_prompt})
 
-        if input_data.images:
+        if input_data.images and not use_vision_engine:
             image_added = False
             for img_data in input_data.images:
                 if isinstance(img_data.data, str) and img_data.data.startswith(
@@ -869,7 +920,7 @@ class BasicMemoryAgent(AgentInterface):
             self.reset_interrupt()
             self.prompt_mode_flag = False
 
-            messages = self._to_messages(input_data)
+            messages = await self._to_messages(input_data)
             tools = None
             tool_mode = None
             llm_supports_native_tools = False
@@ -893,10 +944,7 @@ class BasicMemoryAgent(AgentInterface):
                     logger.warning(
                         f"No tools available/formatted for '{tool_mode}' mode, despite MCP being enabled."
                     )
-                    if (
-                        self._guidance_tool_router_enabled
-                        and tool_mode == "OpenAI"
-                    ):
+                    if self._guidance_tool_router_enabled and tool_mode == "OpenAI":
                         raise RuntimeError(
                             "MCP is enabled but no tools were loaded for OpenAI mode. "
                             "Check mcp_servers.json and mcp_enabled_servers."

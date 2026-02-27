@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, ClassVar, Optional, Literal, List
 from .i18n import I18nMixin, Description
 from .stateless_llm import StatelessLLMConfigs
+from .vision import VisionConfig
 
 # ======== Configurations for different Agents ========
 
@@ -30,7 +31,9 @@ class BasicMemoryAgentConfig(I18nMixin, BaseModel):
     ] = Field(..., alias="llm_provider")
 
     faster_first_response: Optional[bool] = Field(True, alias="faster_first_response")
-    segment_method: Literal["regex", "pysbd", "none"] = Field("pysbd", alias="segment_method")
+    segment_method: Literal["regex", "pysbd", "none"] = Field(
+        "pysbd", alias="segment_method"
+    )
     use_mcpp: Optional[bool] = Field(False, alias="use_mcpp")
     mcp_enabled_servers: Optional[List[str]] = Field([], alias="mcp_enabled_servers")
     guidance_tool_router_enabled: Optional[bool] = Field(
@@ -38,6 +41,10 @@ class BasicMemoryAgentConfig(I18nMixin, BaseModel):
     )
     guidance_tool_router_target_servers: Optional[List[str]] = Field(
         default_factory=list, alias="guidance_tool_router_target_servers"
+    )
+    vision_config: VisionConfig = Field(
+        default_factory=VisionConfig,
+        alias="vision_config",
     )
 
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
@@ -68,6 +75,10 @@ class BasicMemoryAgentConfig(I18nMixin, BaseModel):
         "guidance_tool_router_target_servers": Description(
             en="Optional MCP server allow-list for the OpenClaw router (example: ['weather', 'discord'])",
             zh="OpenClaw 路由器可选 MCP 服务器白名单（例如 ['weather', 'discord']）",
+        ),
+        "vision_config": Description(
+            en="Dedicated vision model settings for camera/screen inputs",
+            zh="摄像头/屏幕输入的独立视觉模型配置",
         ),
     }
 
@@ -169,7 +180,9 @@ class LettaConfig(I18nMixin, BaseModel):
     port: int = Field(8283, alias="port")
     id: str = Field(..., alias="id")
     faster_first_response: Optional[bool] = Field(True, alias="faster_first_response")
-    segment_method: Literal["regex", "pysbd", "none"] = Field("pysbd", alias="segment_method")
+    segment_method: Literal["regex", "pysbd", "none"] = Field(
+        "pysbd", alias="segment_method"
+    )
 
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
         "host": Description(

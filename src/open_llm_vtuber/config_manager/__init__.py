@@ -54,6 +54,7 @@ from .agent import (
     Mem0LLMConfig,
     Mem0EmbedderConfig,
 )
+from .vision import VisionConfig, SmolVLM2VisionConfig
 
 # Import utility functions
 from .utils import (
@@ -84,6 +85,8 @@ __all__ = [
     "Mem0VectorStoreConfig",
     "Mem0LLMConfig",
     "Mem0EmbedderConfig",
+    "VisionConfig",
+    "SmolVLM2VisionConfig",
     # ASR related classes
     "ASRConfig",
     "AzureASRConfig",

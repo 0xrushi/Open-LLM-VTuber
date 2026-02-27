@@ -1,0 +1,13 @@
+[Unit]
+Description=Open LLM VTuber Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/alpha/Documents/Open-LLM-VTuber
+ExecStart=/home/alpha/Documents/Open-LLM-VTuber/.venv/bin/python run_server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

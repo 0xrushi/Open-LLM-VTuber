@@ -71,6 +71,17 @@ character_config:
         # Guidance 风格的严格路由：让模型先判断是普通对话还是 openclaw 工具调用。
         guidance_tool_router_enabled: False
         guidance_tool_router_target_servers: [] # 例如 ["weather", "discord"]
+        # 可选独立视觉模型，用于处理摄像头/屏幕图像。
+        # 启用后，图像会先由视觉模型总结，再把文本总结提供给聊天 LLM。
+        vision_config:
+          enabled: False
+          vision_model: 'smolvlm2'
+          smolvlm2:
+            model_id: 'HuggingFaceTB/SmolVLM2-2.2B-Instruct'
+            device: 'auto' # auto, cpu, cuda, mps
+            dtype: 'auto' # auto, float16, bfloat16, float32
+            max_new_tokens: 160
+            prompt_template: '请为对话提供摄像头/屏幕图像的简洁上下文描述，重点关注人物、动作、物体和场景细节。'
 
       hume_ai_agent:
         api_key: ''

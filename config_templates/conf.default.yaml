@@ -71,6 +71,18 @@ character_config:
         # Guidance-style strict routing: model decides chat vs openclaw tool call.
         guidance_tool_router_enabled: False
         guidance_tool_router_target_servers: [] # e.g. ["weather", "discord"]
+        # Optional dedicated vision model for camera/screen images.
+        # When enabled, images are first summarized by the vision model,
+        # then the summary is sent to your chat LLM as text context.
+        vision_config:
+          enabled: False
+          vision_model: 'smolvlm2'
+          smolvlm2:
+            model_id: 'HuggingFaceTB/SmolVLM2-2.2B-Instruct'
+            device: 'auto' # auto, cpu, cuda, mps
+            dtype: 'auto' # auto, float16, bfloat16, float32
+            max_new_tokens: 160
+            prompt_template: 'Describe the camera/screen image for conversational context. Focus on people, actions, objects, and scene details that matter for dialogue.'
 
       letta_agent:
         host: 'localhost' # Host address

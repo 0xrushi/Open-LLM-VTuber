@@ -6,6 +6,7 @@ from .agents.basic_memory_agent import BasicMemoryAgent
 from .stateless_llm_factory import LLMFactory as StatelessLLMFactory
 from .agents.hume_ai import HumeAIAgent
 from .agents.letta_agent import LettaAgent
+from ..vision.vision_factory import VisionFactory
 
 from ..mcpp.tool_manager import ToolManager
 from ..mcpp.tool_executor import ToolExecutor
@@ -60,6 +61,16 @@ class AgentFactory:
                 llm_provider=llm_provider, system_prompt=system_prompt, **llm_config
             )
 
+            vision_engine = None
+            vision_config = basic_memory_settings.get("vision_config", {})
+            if vision_config.get("enabled", False):
+                vision_model = vision_config.get("vision_model", "smolvlm2")
+                vision_model_config = vision_config.get(vision_model, {})
+                vision_engine = VisionFactory.get_vision_engine(
+                    vision_model,
+                    **vision_model_config,
+                )
+
             tool_prompts = kwargs.get("system_config", {}).get("tool_prompts", {})
 
             # Extract MCP components/data needed by BasicMemoryAgent from kwargs
@@ -89,6 +100,7 @@ class AgentFactory:
                 guidance_tool_router_target_servers=basic_memory_settings.get(
                     "guidance_tool_router_target_servers", []
                 ),
+                vision_engine=vision_engine,
             )
 
         elif conversation_agent_choice == "mem0_agent":
