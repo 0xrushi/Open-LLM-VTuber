@@ -129,6 +129,19 @@ agent_settings:
 The service file is at `open-llm-vtuber.service` and is installed at
 `~/.config/systemd/user/open-llm-vtuber.service`.
 
+Alternative service file (same behavior) is also available at
+`run_with_nullclaw_gateway.service`.
+
+This service starts both:
+- `run_server.py` (Open-LLM-VTuber)
+- `nullclaw gateway` on `0.0.0.0:5001`
+
+You can override paths/host/port in the service with:
+- `OPEN_LLM_VTUBER_DIR`
+- `NULLCLAW_BIN`
+- `NULLCLAW_HOST`
+- `NULLCLAW_PORT`
+
 ```bash
 # Start / stop
 systemctl --user start open-llm-vtuber
@@ -152,6 +165,15 @@ After editing the service file, copy it and reload:
 cp open-llm-vtuber.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 ```
+
+If your LLM/gateway uses environment secrets, make sure systemd user services receive them:
+
+```bash
+systemctl --user import-environment GEMINI_API_KEY LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY
+systemctl --user restart open-llm-vtuber
+```
+
+Or persist them in `~/.config/open-llm-vtuber.env` (loaded by the service).
 
 ---
 

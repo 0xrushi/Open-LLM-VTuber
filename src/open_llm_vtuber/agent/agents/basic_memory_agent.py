@@ -262,7 +262,9 @@ class BasicMemoryAgent(AgentInterface):
         categorized_tools: Dict[str, List[Dict[str, Any]]],
     ) -> Dict[str, Any]:
         """Run a strict JSON router pass for chat vs openclaw tool call."""
-        if not isinstance(self._llm, OpenAICompatibleAsyncLLM):
+        base_llm = self._get_base_llm()
+
+        if not isinstance(base_llm, OpenAICompatibleAsyncLLM):
             return {
                 "mode": "chat",
                 "capability": None,
@@ -270,7 +272,7 @@ class BasicMemoryAgent(AgentInterface):
                 "query": "",
             }
 
-        if not hasattr(self._llm, "client"):
+        if not hasattr(base_llm, "client"):
             return {
                 "mode": "chat",
                 "capability": None,
@@ -297,8 +299,8 @@ class BasicMemoryAgent(AgentInterface):
             "If capability is unavailable, choose mode='chat'."
         )
 
-        response = await self._llm.client.chat.completions.create(
-            model=self._llm.model,
+        response = await base_llm.client.chat.completions.create(
+            model=base_llm.model,
             temperature=0,
             response_format={
                 "type": "json_schema",
@@ -367,6 +369,15 @@ class BasicMemoryAgent(AgentInterface):
         """Set the LLM for chat completion."""
         self._llm = llm
         self.chat = self._chat_function_factory()
+
+    def _get_base_llm(self) -> StatelessLLMInterface:
+        """Return the concrete LLM instance if wrappers are applied."""
+        current = self._llm
+        visited = set()
+        while hasattr(current, "wrapped_llm") and id(current) not in visited:
+            visited.add(id(current))
+            current = getattr(current, "wrapped_llm")
+        return current
 
     def set_runtime_tooling(
         self,
@@ -927,17 +938,18 @@ class BasicMemoryAgent(AgentInterface):
 
             if self._use_mcpp and self._tool_manager:
                 tools = None
-                if isinstance(self._llm, ClaudeAsyncLLM):
+                base_llm = self._get_base_llm()
+                if isinstance(base_llm, ClaudeAsyncLLM):
                     tool_mode = "Claude"
                     tools = self._formatted_tools_claude
                     llm_supports_native_tools = True
-                elif isinstance(self._llm, OpenAICompatibleAsyncLLM):
+                elif isinstance(base_llm, OpenAICompatibleAsyncLLM):
                     tool_mode = "OpenAI"
                     tools = self._formatted_tools_openai
                     llm_supports_native_tools = True
                 else:
                     logger.warning(
-                        f"LLM type {type(self._llm)} not explicitly handled for tool mode determination."
+                        f"LLM type {type(base_llm)} not explicitly handled for tool mode determination."
                     )
 
                 if llm_supports_native_tools and not tools:

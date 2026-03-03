@@ -11,6 +11,10 @@ class StatelessLLMBaseConfig(I18nMixin):
     interrupt_method: Literal["system", "user"] = Field(
         "user", alias="interrupt_method"
     )
+    langfuse_enabled: bool = Field(False, alias="langfuse_enabled")
+    langfuse_host: str | None = Field(None, alias="langfuse_host")
+    langfuse_public_key: str | None = Field(None, alias="langfuse_public_key")
+    langfuse_secret_key: str | None = Field(None, alias="langfuse_secret_key")
     DESCRIPTIONS: ClassVar[dict[str, Description]] = {
         "interrupt_method": Description(
             en="""The method to use for prompting the interruption signal.
@@ -18,6 +22,22 @@ class StatelessLLMBaseConfig(I18nMixin):
             Otherwise, use "user". You don't need to change this setting.""",
             zh="""用于表示中断信号的方法(提示词模式)。如果LLM支持在聊天记忆中的任何位置插入系统提示词，请使用“system”。
             否则，请使用“user”。您不需要更改此设置。""",
+        ),
+        "langfuse_enabled": Description(
+            en="Enable optional Langfuse tracing for this LLM provider",
+            zh="为该 LLM 提供商启用可选的 Langfuse 追踪",
+        ),
+        "langfuse_host": Description(
+            en="Langfuse host URL (optional; leave empty for cloud default)",
+            zh="Langfuse 服务地址（可选；留空使用云端默认地址）",
+        ),
+        "langfuse_public_key": Description(
+            en="Langfuse public key (optional)",
+            zh="Langfuse 公钥（可选）",
+        ),
+        "langfuse_secret_key": Description(
+            en="Langfuse secret key (optional)",
+            zh="Langfuse 私钥（可选）",
         ),
     }
 
@@ -183,6 +203,42 @@ class GroqConfig(OpenAICompatibleConfig):
     )
 
 
+class NullclawGatewayConfig(StatelessLLMBaseConfig):
+    """Configuration for nullclaw gateway webhook integration."""
+
+    base_url: str = Field("http://127.0.0.1:5001", alias="base_url")
+    webhook_path: str = Field("/webhook", alias="webhook_path")
+    bearer_token: str | None = Field(None, alias="bearer_token")
+    request_timeout_sec: float = Field(30.0, alias="request_timeout_sec")
+    interrupt_method: Literal["system", "user"] = Field(
+        "user", alias="interrupt_method"
+    )
+
+    _NULLCLAW_DESCRIPTIONS: ClassVar[dict[str, Description]] = {
+        "base_url": Description(
+            en="Base URL of nullclaw gateway (e.g. http://127.0.0.1:5001)",
+            zh="nullclaw 网关基础地址（例如 http://127.0.0.1:5001）",
+        ),
+        "webhook_path": Description(
+            en="Webhook path exposed by nullclaw gateway (default: /webhook)",
+            zh="nullclaw 网关 webhook 路径（默认：/webhook）",
+        ),
+        "bearer_token": Description(
+            en="Optional Bearer token for /webhook authorization",
+            zh="/webhook 可选 Bearer 鉴权令牌",
+        ),
+        "request_timeout_sec": Description(
+            en="HTTP request timeout in seconds",
+            zh="HTTP 请求超时时间（秒）",
+        ),
+    }
+
+    DESCRIPTIONS: ClassVar[dict[str, Description]] = {
+        **StatelessLLMBaseConfig.DESCRIPTIONS,
+        **_NULLCLAW_DESCRIPTIONS,
+    }
+
+
 class ClaudeConfig(StatelessLLMBaseConfig):
     """Configuration for OpenAI Official API."""
 
@@ -246,6 +302,9 @@ class StatelessLLMConfigs(I18nMixin, BaseModel):
     zhipu_llm: ZhipuConfig | None = Field(None, alias="zhipu_llm")
     deepseek_llm: DeepseekConfig | None = Field(None, alias="deepseek_llm")
     groq_llm: GroqConfig | None = Field(None, alias="groq_llm")
+    nullclaw_gateway_llm: NullclawGatewayConfig | None = Field(
+        None, alias="nullclaw_gateway_llm"
+    )
     claude_llm: ClaudeConfig | None = Field(None, alias="claude_llm")
     llama_cpp_llm: LlamaCppConfig | None = Field(None, alias="llama_cpp_llm")
     mistral_llm: MistralConfig | None = Field(None, alias="mistral_llm")
@@ -276,6 +335,10 @@ class StatelessLLMConfigs(I18nMixin, BaseModel):
             en="Configuration for Deepseek API", zh="Deepseek API 配置"
         ),
         "groq_llm": Description(en="Configuration for Groq API", zh="Groq API 配置"),
+        "nullclaw_gateway_llm": Description(
+            en="Configuration for nullclaw gateway webhook",
+            zh="nullclaw 网关 webhook 配置",
+        ),
         "claude_llm": Description(
             en="Configuration for Claude API", zh="Claude API配置"
         ),

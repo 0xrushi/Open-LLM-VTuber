@@ -50,13 +50,62 @@ class SmolVLM2Vision(VisionInterface):
         logger.info(
             f"Loading SmolVLM2 model={self._model_id} device={self._device} dtype={self._dtype}"
         )
-        self._processor = AutoProcessor.from_pretrained(self._model_id)
-        self._model = model_cls.from_pretrained(
-            self._model_id,
-            torch_dtype=self._dtype,
-        )
+        self._processor = self._load_processor(AutoProcessor)
+        self._model = self._load_model(model_cls)
         self._model.to(self._device)
         self._model.eval()
+
+    def _load_processor(self, auto_processor_cls):
+        try:
+            return auto_processor_cls.from_pretrained(self._model_id)
+        except Exception as exc:
+            if "torchvision" in str(exc):
+                raise ImportError(
+                    "SmolVLM2 requires `torchvision` in addition to `torch` and "
+                    "`transformers`. Install it with `uv add torchvision` or "
+                    "`uv pip install torchvision`."
+                ) from exc
+
+            if "SmolVLMProcessor" not in str(exc):
+                raise
+
+            logger.warning(
+                "SmolVLMProcessor is unavailable in the local transformers build; "
+                "retrying with trust_remote_code=True"
+            )
+            try:
+                return auto_processor_cls.from_pretrained(
+                    self._model_id,
+                    trust_remote_code=True,
+                )
+            except Exception as retry_exc:
+                if "torchvision" in str(retry_exc):
+                    raise ImportError(
+                        "SmolVLM2 requires `torchvision` in addition to `torch` "
+                        "and `transformers`. Install it with `uv add torchvision` "
+                        "or `uv pip install torchvision`."
+                    ) from retry_exc
+                raise
+
+    def _load_model(self, model_cls):
+        try:
+            return model_cls.from_pretrained(
+                self._model_id,
+                torch_dtype=self._dtype,
+            )
+        except Exception as exc:
+            if "SmolVLMProcessor" not in str(exc):
+                raise
+
+            logger.warning(
+                "SmolVLM model helpers are unavailable in the local transformers build; "
+                "retrying with trust_remote_code=True"
+            )
+            return model_cls.from_pretrained(
+                self._model_id,
+                torch_dtype=self._dtype,
+                trust_remote_code=True,
+            )
 
     def _resolve_device(self, requested: str) -> str:
         if requested != "auto":

@@ -8,7 +8,7 @@ dependencies = [
     "anthropic>=0.40.0",
     "azure-cognitiveservices-speech>=1.41.1",
     "chardet>=5.2.0",
-    "cartesia>=2.0.0", 
+    "cartesia>=2.0.0",
     "edge-tts>=7.0.0",
     "elevenlabs>=1.0.0",
     "fastapi[standard]>=0.115.8",
@@ -42,6 +42,7 @@ dependencies = [
     "letta-client>=0.1.100",
     "duckduckgo-mcp-server>=0.1.1",
     "pillow>=10.4.0",
+    "num2words>=0.5.14",
 ]
 
 [project.optional-dependencies]
@@ -53,6 +54,16 @@ bilibili = [
 motion = [
     "mediapipe>=0.10.0",
     "opencv-python>=4.8.0",
+]
+observability = [
+    "langfuse>=2.56.0",
+]
+
+[dependency-groups]
+strix-halo = [
+    "triton @ https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/triton-3.5.1%2Brocm7.1.0.gita272dfa8-cp310-cp310-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.10'",
+    "torch @ https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/torch-2.9.1%2Brocm7.1.0.lw.git351ff442-cp310-cp310-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.10'",
+    "torchvision @ https://repo.radeon.com/rocm/manylinux/rocm-rel-7.1/torchvision-0.24.0%2Brocm7.1.0.gitb919bd0c-cp310-cp310-linux_x86_64.whl ; sys_platform == 'linux' and platform_machine == 'x86_64' and python_version == '3.10'",
 ]
 
 [tool.pixi.project]

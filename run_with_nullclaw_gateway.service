@@ -1,5 +1,5 @@
 [Unit]
-Description=Open LLM VTuber + nullclaw gateway
+Description=Open LLM VTuber launcher (with nullclaw gateway)
 After=network.target
 
 [Service]
