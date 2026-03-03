@@ -28,11 +28,15 @@ loguru==0.7.3
     # via open-llm-vtuber (pyproject.toml)
 mcp==1.15.0
     # via open-llm-vtuber (pyproject.toml)
+num2words==0.5.14
+    # via open-llm-vtuber (pyproject.toml)
 numpy==1.26.4
     # via open-llm-vtuber (pyproject.toml)
 onnxruntime==1.23.0
     # via open-llm-vtuber (pyproject.toml)
 openai==1.109.1
+    # via open-llm-vtuber (pyproject.toml)
+pillow==12.1.1
     # via open-llm-vtuber (pyproject.toml)
 pre-commit==4.3.0
     # via open-llm-vtuber (pyproject.toml)
@@ -52,7 +56,7 @@ ruff==0.13.2
     # via open-llm-vtuber (pyproject.toml)
 scipy==1.16.2
     # via open-llm-vtuber (pyproject.toml)
-sherpa-onnx==1.12.14
+sherpa-onnx==1.12.28
     # via open-llm-vtuber (pyproject.toml)
 soundfile==0.13.1
     # via open-llm-vtuber (pyproject.toml)
@@ -63,6 +67,8 @@ torch==2.2.2 ; platform_machine == 'x86_64' and sys_platform == 'darwin'
 torch==2.8.0 ; platform_machine == 'arm64' or sys_platform != 'darwin'
     # via open-llm-vtuber (pyproject.toml)
 tqdm==4.67.1
+    # via open-llm-vtuber (pyproject.toml)
+transformers==5.2.0
     # via open-llm-vtuber (pyproject.toml)
 uvicorn==0.37.0
     # via open-llm-vtuber (pyproject.toml)
