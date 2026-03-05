@@ -98,6 +98,7 @@ class WebSocketHandler:
             "client-perf": self._handle_client_perf,
             "request-init-config": self._handle_init_config_request,
             "heartbeat": self._handle_heartbeat,
+            "set-wakeword-enabled": self._handle_set_wakeword_enabled,
         }
 
     async def push_vrm_motion(
@@ -226,6 +227,7 @@ class WebSocketHandler:
             vad_engine=self.default_context_cache.vad_engine,
             agent_engine=self.default_context_cache.agent_engine,
             translate_engine=self.default_context_cache.translate_engine,
+            wakeword_engine=self.default_context_cache.wakeword_engine,
             mcp_server_registery=self.default_context_cache.mcp_server_registery,
             tool_adapter=self.default_context_cache.tool_adapter,
             send_text=send_text,
@@ -524,23 +526,59 @@ class WebSocketHandler:
         """Handle incoming raw audio data for VAD processing"""
         context = self.client_contexts[client_uid]
         chunk = data.get("audio", [])
-        if chunk:
-            for audio_bytes in context.vad_engine.detect_speech(chunk):
-                if audio_bytes == b"<|PAUSE|>":
+        if not chunk:
+            return
+
+        # Wakeword gate: if enabled and locked, feed audio to wakeword engine only
+        if context.wakeword_enabled and context.wakeword_engine:
+            # Check timeout: relock if activated but silent too long
+            if context.wakeword_activated:
+                elapsed = time.time() - context.wakeword_last_speech_time
+                if (
+                    context.wakeword_last_speech_time > 0
+                    and elapsed > context.wakeword_timeout_sec
+                ):
+                    context.wakeword_activated = False
+                    context.wakeword_engine.reset()
+                    logger.info("Wakeword relocked due to silence timeout.")
                     await websocket.send_text(
-                        json.dumps({"type": "control", "text": "interrupt"})
+                        json.dumps({"type": "wakeword-status", "activated": False})
                     )
-                elif audio_bytes == b"<|RESUME|>":
-                    pass
-                elif len(audio_bytes) > 1024:
-                    # Detected audio activity (voice)
-                    self.received_data_buffers[client_uid] = np.append(
-                        self.received_data_buffers[client_uid],
-                        np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32),
-                    )
+
+            if not context.wakeword_activated:
+                # LOCKED state: convert float32 audio to int16 for wakeword
+                audio_f32 = np.array(chunk, dtype=np.float32)
+                audio_int16 = (audio_f32 * 32767).astype(np.int16)
+                triggered = context.wakeword_engine.process_audio(audio_int16.tobytes())
+                if triggered:
+                    context.wakeword_activated = True
+                    context.wakeword_last_speech_time = time.time()
+                    logger.info("Wakeword detected! Unlocking audio pipeline.")
                     await websocket.send_text(
-                        json.dumps({"type": "control", "text": "mic-audio-end"})
+                        json.dumps({"type": "wakeword-status", "activated": True})
                     )
+                return  # Don't pass audio to VAD while locked
+
+        # Normal VAD processing (UNLOCKED or wakeword disabled)
+        for audio_bytes in context.vad_engine.detect_speech(chunk):
+            if audio_bytes == b"<|PAUSE|>":
+                await websocket.send_text(
+                    json.dumps({"type": "control", "text": "interrupt"})
+                )
+            elif audio_bytes == b"<|RESUME|>":
+                pass
+            elif len(audio_bytes) > 1024:
+                # Update wakeword speech timer on voice activity
+                if context.wakeword_enabled:
+                    context.wakeword_last_speech_time = time.time()
+                # Detected audio activity (voice)
+                self.received_data_buffers[client_uid] = np.append(
+                    self.received_data_buffers[client_uid],
+                    np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32),
+                )
+                await websocket.send_text(
+                    json.dumps({"type": "control", "text": "mic-audio-end"})
+                )
 
     async def _handle_conversation_trigger(
         self, websocket: WebSocket, client_uid: str, data: WSMessage
@@ -685,3 +723,32 @@ class WebSocketHandler:
             await websocket.send_json({"type": "heartbeat-ack"})
         except Exception as e:
             logger.error(f"Error sending heartbeat acknowledgment: {e}")
+
+    async def _handle_set_wakeword_enabled(
+        self, websocket: WebSocket, client_uid: str, data: WSMessage
+    ) -> None:
+        """Handle toggling wakeword detection on/off from the client."""
+        context = self.client_contexts[client_uid]
+        enabled = bool(data.get("enabled", False))
+        context.wakeword_enabled = enabled
+
+        if not enabled:
+            # When disabling, also unlock so audio flows normally
+            context.wakeword_activated = False
+        else:
+            # When enabling, start in locked state
+            context.wakeword_activated = False
+            context.wakeword_last_speech_time = 0.0
+            if context.wakeword_engine:
+                context.wakeword_engine.reset()
+
+        logger.info(f"Wakeword enabled set to {enabled} for client {client_uid}")
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "wakeword-status",
+                    "enabled": enabled,
+                    "activated": context.wakeword_activated,
+                }
+            )
+        )

@@ -202,9 +202,15 @@ async function main() {
   });
 
   // Controls: Transform toggle
-  const transformPanel = new TransformPanel(live2d, audio);
+  const transformPanel = new TransformPanel(live2d, audio, wsClient);
   controls.onTransformToggle((visible: boolean) => {
     transformPanel.setVisible(visible);
+  });
+
+  // Wakeword status updates from server
+  wsClient.on("wakeword-status", (data: Record<string, unknown>) => {
+    const activated = data.activated as boolean;
+    transformPanel.setWakewordStatus(activated);
   });
 
   // Chat: Send text

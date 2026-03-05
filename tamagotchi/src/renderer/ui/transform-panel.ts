@@ -1,5 +1,6 @@
 import type { Live2DRenderer } from "../live2d-renderer";
 import type { AudioManager } from "../audio-manager";
+import type { WebSocketClient } from "../websocket-client";
 
 /**
  * Panel with sliders to adjust the Live2D model's position, scale, rotation,
@@ -9,10 +10,14 @@ export class TransformPanel {
   private container: HTMLElement;
   private live2d: Live2DRenderer;
   private audio: AudioManager | null = null;
+  private wsClient: WebSocketClient | null = null;
+  private wakewordDot: HTMLElement | null = null;
+  private wakewordHint: HTMLElement | null = null;
 
-  constructor(live2d: Live2DRenderer, audio?: AudioManager) {
+  constructor(live2d: Live2DRenderer, audio?: AudioManager, wsClient?: WebSocketClient) {
     this.live2d = live2d;
     this.audio = audio ?? null;
+    this.wsClient = wsClient ?? null;
 
     this.container = document.createElement("div");
     this.container.id = "transform-panel";
@@ -67,6 +72,16 @@ export class TransformPanel {
           <select id="tf-mic-select">
             <option value="">Default</option>
           </select>
+        </label>
+
+        <div class="transform-divider"></div>
+        <div class="transform-header">Voice Activation</div>
+
+        <label class="transform-label wakeword-toggle-label">
+          Wakeword
+          <input type="checkbox" id="tf-wakeword-toggle" />
+          <span class="wakeword-status-dot" id="tf-wakeword-dot"></span>
+          <span class="wakeword-hint" id="tf-wakeword-hint">Off</span>
         </label>
 
         <button id="tf-reset" class="transform-reset-btn">Reset All</button>
@@ -181,6 +196,19 @@ export class TransformPanel {
       });
     }
 
+    // Wakeword toggle
+    const wakewordToggle = this.container.querySelector("#tf-wakeword-toggle") as HTMLInputElement;
+    this.wakewordDot = this.container.querySelector("#tf-wakeword-dot");
+    this.wakewordHint = this.container.querySelector("#tf-wakeword-hint");
+
+    wakewordToggle.addEventListener("change", () => {
+      const enabled = wakewordToggle.checked;
+      if (this.wsClient) {
+        this.wsClient.send({ type: "set-wakeword-enabled", enabled });
+      }
+      this.updateWakewordUI(enabled, false);
+    });
+
     resetBtn.addEventListener("click", () => {
       syncFromModel();
       this.live2d.setScale(baseScale);
@@ -189,6 +217,32 @@ export class TransformPanel {
       opacityVal.textContent = "15%";
       applyOpacity(15);
     });
+  }
+
+  setWakewordStatus(activated: boolean): void {
+    const toggle = this.container.querySelector("#tf-wakeword-toggle") as HTMLInputElement | null;
+    const enabled = toggle ? toggle.checked : false;
+    this.updateWakewordUI(enabled, activated);
+  }
+
+  private updateWakewordUI(enabled: boolean, activated: boolean): void {
+    if (this.wakewordDot) {
+      this.wakewordDot.className = "wakeword-status-dot";
+      if (!enabled) {
+        this.wakewordDot.classList.add("wakeword-off");
+      } else if (activated) {
+        this.wakewordDot.classList.add("wakeword-unlocked");
+      } else {
+        this.wakewordDot.classList.add("wakeword-locked");
+      }
+    }
+    if (this.wakewordHint) {
+      this.wakewordHint.textContent = !enabled
+        ? "Off"
+        : activated
+          ? "Listening"
+          : "Say wakeword...";
+    }
   }
 
   setVisible(visible: boolean): void {

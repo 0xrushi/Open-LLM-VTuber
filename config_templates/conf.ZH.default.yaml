@@ -523,6 +523,22 @@ character_config:
       volume: 1.0 # 语音音量（0.5 到 2.0）
       speed: 1.0 # 语音速度（0.6 到 1.5）
 
+  # =================== 唤醒词检测 ===================
+  # 可选的唤醒词功能，用于常开麦克风模式（如桌面宠物模式）。
+  # 启用后，音频会被忽略，直到检测到唤醒词。
+  # 检测到唤醒词后，对话正常进行。静音超时后需要再次唤醒。
+  wakeword_config:
+    enabled: false # 设为 true 以启用唤醒词检测
+    wakeword_model: 'openwakeword' # 唤醒词引擎
+    activation_timeout_sec: 15.0 # 静音多少秒后需要再次唤醒
+
+    openwakeword:
+      wakeword_models: ['hey_jarvis_v0.1'] # openwakeword 模型名称（如 'hey_jarvis_v0.1'、'alexa_v0.1'）
+      inference_framework: 'onnx' # onnx 或 tflite
+      model_threshold: 0.5 # 置信度阈值（0.0 到 1.0）
+      trigger_level: 3 # 触发所需的连续检测次数
+      chunk_size: 1280 # 音频块大小（1280 = 16kHz 下 80ms）
+
   # =================== Voice Activity Detection ===================
   vad_config:
     vad_model: null

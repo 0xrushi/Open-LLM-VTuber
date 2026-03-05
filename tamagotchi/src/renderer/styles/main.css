@@ -334,6 +334,49 @@ body {
   color: #d1d5db;
 }
 
+/* Wakeword toggle */
+.wakeword-toggle-label {
+  gap: 6px;
+}
+
+.wakeword-toggle-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.wakeword-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.wakeword-status-dot.wakeword-off {
+  background: #666;
+}
+
+.wakeword-status-dot.wakeword-locked {
+  background: #f59e0b;
+  animation: pulse 1.5s infinite;
+}
+
+.wakeword-status-dot.wakeword-unlocked {
+  background: #22c55e;
+}
+
+.wakeword-hint {
+  font-size: 10px;
+  color: #9ca3af;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .transform-reset-btn {
   width: 100%;
   margin-top: 4px;

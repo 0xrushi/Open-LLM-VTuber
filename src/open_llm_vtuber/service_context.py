@@ -11,6 +11,7 @@ from .live2d_model import Live2dModel
 from .asr.asr_interface import ASRInterface
 from .tts.tts_interface import TTSInterface
 from .vad.vad_interface import VADInterface
+from .wakeword.wakeword_interface import WakewordInterface
 from .agent.agents.agent_interface import AgentInterface
 from .translate.translate_interface import TranslateInterface
 
@@ -23,6 +24,7 @@ from .mcpp.tool_adapter import ToolAdapter
 from .asr.asr_factory import ASRFactory
 from .tts.tts_factory import TTSFactory
 from .vad.vad_factory import VADFactory
+from .wakeword.wakeword_factory import WakewordFactory
 from .agent.agent_factory import AgentFactory
 from .translate.translate_factory import TranslateFactory
 
@@ -38,6 +40,7 @@ from .config_manager import (
     read_yaml,
     validate_config,
 )
+from .config_manager.wakeword import WakewordConfig
 
 
 class ServiceContext:
@@ -56,6 +59,13 @@ class ServiceContext:
         # translate_engine can be none if translation is disabled
         self.vad_engine: VADInterface | None = None
         self.translate_engine: TranslateInterface | None = None
+        self.wakeword_engine: WakewordInterface | None = None
+
+        # Wakeword state
+        self.wakeword_enabled: bool = False
+        self.wakeword_activated: bool = False
+        self.wakeword_last_speech_time: float = 0.0
+        self.wakeword_timeout_sec: float = 15.0
 
         self.mcp_server_registery: ServerRegistry | None = None
         self.tool_adapter: ToolAdapter | None = None
@@ -202,10 +212,14 @@ class ServiceContext:
             return
         await self.wait_until_turn_idle()
         if not self.send_text:
-            logger.warning("Cannot speak background tool result: send_text unavailable.")
+            logger.warning(
+                "Cannot speak background tool result: send_text unavailable."
+            )
             return
         if not self.tts_engine:
-            logger.warning("Cannot speak background tool result: TTS engine unavailable.")
+            logger.warning(
+                "Cannot speak background tool result: TTS engine unavailable."
+            )
             return
 
         try:
@@ -279,6 +293,7 @@ class ServiceContext:
         vad_engine: VADInterface,
         agent_engine: AgentInterface,
         translate_engine: TranslateInterface | None,
+        wakeword_engine: WakewordInterface | None = None,
         mcp_server_registery: ServerRegistry | None = None,
         tool_adapter: ToolAdapter | None = None,
         send_text: Callable = None,
@@ -302,6 +317,11 @@ class ServiceContext:
         self.vad_engine = vad_engine
         self.agent_engine = agent_engine
         self.translate_engine = translate_engine
+        self.wakeword_engine = wakeword_engine
+        # Copy wakeword state from config
+        wakeword_cfg = character_config.wakeword_config
+        self.wakeword_enabled = wakeword_cfg.enabled
+        self.wakeword_timeout_sec = wakeword_cfg.activation_timeout_sec
         # Load potentially shared components by reference
         self.mcp_server_registery = mcp_server_registery
         self.tool_adapter = tool_adapter
@@ -346,6 +366,9 @@ class ServiceContext:
 
         # init vad from character config
         self.init_vad(config.character_config.vad_config)
+
+        # init wakeword from character config
+        self.init_wakeword(config.character_config.wakeword_config)
 
         # Initialize shared ToolAdapter if it doesn't exist yet
         if (
@@ -430,6 +453,33 @@ class ServiceContext:
             self.character_config.vad_config = vad_config
         else:
             logger.info("VAD already initialized with the same config.")
+
+    def init_wakeword(self, wakeword_config: WakewordConfig) -> None:
+        """Initialize or update the wakeword engine based on configuration."""
+        self.wakeword_enabled = wakeword_config.enabled
+        self.wakeword_timeout_sec = wakeword_config.activation_timeout_sec
+
+        if not wakeword_config.enabled:
+            logger.info("Wakeword detection is disabled.")
+            self.wakeword_engine = None
+            return
+
+        if wakeword_config.wakeword_model is None:
+            logger.info("Wakeword model is not set.")
+            self.wakeword_engine = None
+            return
+
+        if not self.wakeword_engine or (
+            self.character_config.wakeword_config != wakeword_config
+        ):
+            logger.info(f"Initializing Wakeword: {wakeword_config.wakeword_model}")
+            self.wakeword_engine = WakewordFactory.get_wakeword_engine(
+                wakeword_config.wakeword_model,
+                **getattr(wakeword_config, wakeword_config.wakeword_model).model_dump(),
+            )
+            self.character_config.wakeword_config = wakeword_config
+        else:
+            logger.info("Wakeword already initialized with the same config.")
 
     async def init_agent(self, agent_config: AgentConfig, persona_prompt: str) -> None:
         """Initialize or update the LLM engine based on agent configuration."""

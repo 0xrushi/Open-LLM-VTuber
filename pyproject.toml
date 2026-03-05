@@ -43,6 +43,7 @@ dependencies = [
     "duckduckgo-mcp-server>=0.1.1",
     "pillow>=10.4.0",
     "num2words>=0.5.14",
+    "openwakeword>=0.6.0",
 ]
 
 [project.optional-dependencies]

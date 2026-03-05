@@ -55,6 +55,7 @@ from .agent import (
     Mem0EmbedderConfig,
 )
 from .vision import VisionConfig, SmolVLM2VisionConfig
+from .wakeword import WakewordConfig, OpenWakeWordConfig
 from .tamagotchi import TamagotchiConfig
 
 # Import utility functions
@@ -88,6 +89,8 @@ __all__ = [
     "Mem0EmbedderConfig",
     "VisionConfig",
     "SmolVLM2VisionConfig",
+    "WakewordConfig",
+    "OpenWakeWordConfig",
     "TamagotchiConfig",
     # ASR related classes
     "ASRConfig",

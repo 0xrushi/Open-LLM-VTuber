@@ -529,6 +529,22 @@ character_config:
       volume: 1.0 # Voice volume (0.5 to 2.0)
       speed: 1.0 # Voice speed (0.6 to 1.5)
 
+  # =================== Wakeword Detection ===================
+  # Optional wakeword gate for always-on mic (e.g. tamagotchi mode).
+  # When enabled, audio is ignored until the wakeword is spoken.
+  # After detection, conversation flows normally. Relocks after silence timeout.
+  wakeword_config:
+    enabled: false # Set to true to require a wakeword before conversation
+    wakeword_model: 'openwakeword' # Wakeword engine to use
+    activation_timeout_sec: 15.0 # Seconds of silence before requiring wakeword again
+
+    openwakeword:
+      wakeword_models: ['hey_jarvis_v0.1'] # Model names from openwakeword (e.g. 'hey_jarvis_v0.1', 'alexa_v0.1')
+      inference_framework: 'onnx' # onnx or tflite
+      model_threshold: 0.5 # Confidence threshold (0.0 to 1.0)
+      trigger_level: 3 # Consecutive detections required to trigger
+      chunk_size: 1280 # Audio chunk size in samples (1280 = 80ms at 16kHz)
+
   # =================== Voice Activity Detection ===================
   vad_config:
     vad_model: null
