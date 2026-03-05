@@ -565,6 +565,15 @@ character_config:
         source_lang: 'zh'
         target_lang: 'ja'
 
+# 桌面宠物（拓麻歌子）模式
+tamagotchi_config:
+  enabled: false        # 是否启用桌面宠物模式
+  window_width: 400     # 窗口宽度（像素）
+  window_height: 600    # 窗口高度（像素）
+  always_on_top: true   # 窗口始终置顶
+  click_through: true   # 鼠标点击穿透透明区域
+  opacity: 1.0          # 窗口透明度（0.0 到 1.0）
+
 # 直播平台集成
 live_config:
   bilibili_live:

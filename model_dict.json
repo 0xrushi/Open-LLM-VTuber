@@ -5,7 +5,7 @@
         "url": "/live2d-models/mao_pro/runtime/mao_pro.model3.json",
         "kScale": 0.5,
         "initialXshift": 0,
-        "initialYshift": 0,
+        "initialYshift": 337,
         "kXOffset": 1150,
         "idleMotionGroupName": "Idle",
         "emotionMap": {
@@ -31,9 +31,9 @@
         "name": "maroon",
         "description": "",
         "url": "/live2d-models/maroon/model.model3.json",
-        "kScale": 0.5,
+        "kScale": 0.14,
         "initialXshift": 0,
-        "initialYshift": 0,
+        "initialYshift": 337,
         "kXOffset": 1150,
         "idleMotionGroupName": "Idle",
         "emotionMap": {

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Open-LLM-VTuber Pet</title>
+    <link rel="stylesheet" href="./src/renderer/styles/main.css" />
+    <!-- Cubism 4 SDK core must load before pixi-live2d-display -->
+    <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+    <!-- PixiJS and Live2D display plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.3/dist/pixi.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
+  </head>
+  <body>
+    <canvas id="live2d-canvas"></canvas>
+    <div id="controls-island"></div>
+    <div id="chat-overlay"></div>
+    <div id="status-indicator"></div>
+    <script type="module" src="./src/renderer/index.ts"></script>
+  </body>
+</html>

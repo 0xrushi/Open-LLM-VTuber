@@ -104,7 +104,7 @@ class WebSocketServer:
             init_client_ws_route(ws_handler=self.ws_handler),
         )
         self.app.include_router(
-            init_config_routes(),
+            init_config_routes(config=config),
         )
         self.app.include_router(
             init_webtool_routes(default_context_cache=self.default_context_cache),
@@ -149,7 +149,7 @@ class WebSocketServer:
             AvatarStaticFiles(directory="avatars"),
             name="avatars",
         )
-        
+
         # Mount models directory
         # The VRM models are located in frontend/models
         models_dir = "frontend/models"

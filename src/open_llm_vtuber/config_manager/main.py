@@ -5,6 +5,7 @@ from typing import Dict, ClassVar
 from .system import SystemConfig
 from .character import CharacterConfig
 from .live import LiveConfig
+from .tamagotchi import TamagotchiConfig
 from .i18n import I18nMixin, Description
 
 
@@ -16,6 +17,9 @@ class Config(I18nMixin, BaseModel):
     system_config: SystemConfig = Field(default=None, alias="system_config")
     character_config: CharacterConfig = Field(..., alias="character_config")
     live_config: LiveConfig = Field(default=LiveConfig(), alias="live_config")
+    tamagotchi_config: TamagotchiConfig = Field(
+        default_factory=TamagotchiConfig, alias="tamagotchi_config"
+    )
 
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
         "system_config": Description(
@@ -26,5 +30,9 @@ class Config(I18nMixin, BaseModel):
         ),
         "live_config": Description(
             en="Live streaming platform integration settings", zh="直播平台集成设置"
+        ),
+        "tamagotchi_config": Description(
+            en="Desktop pet (tamagotchi) mode settings",
+            zh="桌面宠物（拓麻歌子）模式设置",
         ),
     }

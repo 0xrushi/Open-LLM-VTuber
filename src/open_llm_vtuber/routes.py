@@ -18,7 +18,10 @@ class RotationPayload(BaseModel):
     x: float = 0.0
     y: float = 0.0
     z: float = 0.0
-    w: Optional[float] = Field(default=None, description="Quaternion W component. When omitted, XYZ is treated as Euler angles.")
+    w: Optional[float] = Field(
+        default=None,
+        description="Quaternion W component. When omitted, XYZ is treated as Euler angles.",
+    )
 
 
 class PositionPayload(BaseModel):
@@ -34,7 +37,9 @@ class VRMBonePayload(BaseModel):
 
 
 class VRMMotionPayload(BaseModel):
-    bones: List[VRMBonePayload] = Field(..., description="List of bone poses to apply immediately")
+    bones: List[VRMBonePayload] = Field(
+        ..., description="List of bone poses to apply immediately"
+    )
     target_client_uid: Optional[str] = Field(
         default=None,
         description="Optional client UID to deliver the pose to. When omitted, the pose is broadcast.",
@@ -76,7 +81,9 @@ def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
             HTTPException: 400 if no bones provided, 404 if no active clients.
         """
         if not payload.bones:
-            raise HTTPException(status_code=400, detail="At least one bone pose is required")
+            raise HTTPException(
+                status_code=400, detail="At least one bone pose is required"
+            )
 
         message = {
             "type": "vrm-motion",
@@ -89,7 +96,9 @@ def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
             target_client_uid=payload.target_client_uid,
         )
         if delivered == 0:
-            raise HTTPException(status_code=404, detail="No active clients available for this request")
+            raise HTTPException(
+                status_code=404, detail="No active clients available for this request"
+            )
         return {"delivered": delivered, "target_client_uid": payload.target_client_uid}
 
     @router.websocket("/vrm/motion-ws")
@@ -119,10 +128,12 @@ def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
                 # Validate bones data
                 bones = data.get("bones")
                 if not bones or not isinstance(bones, list):
-                    await websocket.send_json({
-                        "status": "error",
-                        "message": "Invalid payload: 'bones' array is required"
-                    })
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "message": "Invalid payload: 'bones' array is required",
+                        }
+                    )
                     continue
 
                 # Build the motion message
@@ -143,10 +154,12 @@ def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
                 )
 
                 # Send acknowledgment back to the streaming client
-                await websocket.send_json({
-                    "status": "ok",
-                    "delivered": delivered,
-                })
+                await websocket.send_json(
+                    {
+                        "status": "ok",
+                        "delivered": delivered,
+                    }
+                )
 
         except WebSocketDisconnect:
             logger.info("VRM motion streaming WebSocket client disconnected")
@@ -157,16 +170,31 @@ def init_vrm_routes(ws_handler: WebSocketHandler) -> APIRouter:
     return router
 
 
-
-def init_config_routes() -> APIRouter:
+def init_config_routes(config=None) -> APIRouter:
     """
     Create and return routes responsible for configuration-related HTTP APIs.
 
-    Currently all configuration management is handled via WebSocket messages,
-    so this router is intentionally empty and serves as a placeholder hook
-    for future HTTP config endpoints.
+    Args:
+        config: Application configuration (optional). When provided, enables
+                config-related endpoints such as tamagotchi-config.
     """
     router = APIRouter()
+
+    if config is not None:
+
+        @router.get("/api/tamagotchi-config")
+        async def get_tamagotchi_config():
+            """Return tamagotchi settings along with server connection info."""
+            system = config.system_config
+            character = config.character_config
+            tamagotchi = config.tamagotchi_config
+            return {
+                "host": system.host,
+                "port": system.port,
+                "live2d_model_name": character.live2d_model_name,
+                "tamagotchi": tamagotchi.model_dump(),
+            }
+
     return router
 
 

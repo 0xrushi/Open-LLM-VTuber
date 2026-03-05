@@ -55,6 +55,7 @@ from .agent import (
     Mem0EmbedderConfig,
 )
 from .vision import VisionConfig, SmolVLM2VisionConfig
+from .tamagotchi import TamagotchiConfig
 
 # Import utility functions
 from .utils import (
@@ -87,6 +88,7 @@ __all__ = [
     "Mem0EmbedderConfig",
     "VisionConfig",
     "SmolVLM2VisionConfig",
+    "TamagotchiConfig",
     # ASR related classes
     "ASRConfig",
     "AzureASRConfig",

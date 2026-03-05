@@ -31,10 +31,18 @@ class SmolVLM2Vision(VisionInterface):
                 from transformers import AutoModelForVision2Seq
 
                 model_cls = AutoModelForVision2Seq
+        except ModuleNotFoundError as exc:
+            missing_module = exc.name or "unknown"
+            raise ImportError(
+                "SmolVLM2 vision dependency is missing: "
+                f"`{missing_module}`. Install dependencies with `uv sync`."
+            ) from exc
         except ImportError as exc:
             raise ImportError(
-                "SmolVLM2 vision requires `transformers` and `Pillow`. "
-                "Install dependencies with `uv sync` after updating pyproject.toml."
+                "SmolVLM2 vision failed to import runtime dependencies. "
+                "Ensure `torch`, `transformers`, and `Pillow` are installed and that "
+                "the local torch runtime is valid. "
+                f"Original error: {exc}"
             ) from exc
 
         self._torch = torch

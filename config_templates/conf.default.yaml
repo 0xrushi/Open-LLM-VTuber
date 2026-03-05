@@ -570,6 +570,15 @@ character_config:
         source_lang: 'zh'
         target_lang: 'ja'
 
+# Desktop Pet (Tamagotchi) Mode
+tamagotchi_config:
+  enabled: false
+  window_width: 400
+  window_height: 600
+  always_on_top: true
+  click_through: true
+  opacity: 1.0
+
 # Live Streaming Integration
 live_config:
   bilibili_live:
