@@ -171,6 +171,94 @@ def scan_config_alts_directory(config_alts_dir: str) -> list[dict]:
     return config_files
 
 
+def _load_model_dict() -> dict:
+    """Load model_dict.json and return a dict keyed by model name."""
+    try:
+        import json
+        with open("model_dict.json", "r", encoding="utf-8") as f:
+            entries = json.load(f)
+        return {e["name"]: e for e in entries if isinstance(e, dict) and "name" in e}
+    except Exception as e:
+        logger.warning(f"Could not load model_dict.json: {e}")
+        return {}
+
+
+def _extract_rich_profile(config: dict, filename: str, model_dict: dict) -> dict:
+    """Extract rich profile metadata from a character config dict."""
+    char = config.get("character_config", {}) if config else {}
+    agent_cfg = char.get("agent_config", {})
+    agent_settings = agent_cfg.get("agent_settings", {})
+    bma = agent_settings.get("basic_memory_agent", {})
+    llm_provider = bma.get("llm_provider", "")
+    llm_configs = agent_cfg.get("llm_configs", {})
+    llm_provider_cfg = llm_configs.get(llm_provider, {})
+    llm_model = llm_provider_cfg.get("model", "")
+
+    tts_cfg = char.get("tts_config", {})
+    tts_model = tts_cfg.get("tts_model", "")
+    tts_provider_cfg = tts_cfg.get(tts_model, {})
+    tts_voice = (
+        tts_provider_cfg.get("voice")
+        or tts_provider_cfg.get("speaker")
+        or tts_provider_cfg.get("voice_name")
+        or ""
+    )
+
+    model_name = char.get("live2d_model_name", "")
+    model_entry = model_dict.get(model_name, {})
+    renderer = model_entry.get("renderer", "live2d")
+    model_url = model_entry.get("url", "")
+    camera_position = model_entry.get("cameraPosition")
+    camera_target = model_entry.get("cameraTarget")
+
+    persona = char.get("persona_prompt", "")
+    persona_preview = (persona[:120] + "…") if len(persona) > 120 else persona
+
+    return {
+        "filename": filename,
+        "name": char.get("conf_name", filename),
+        "live2d_model_name": model_name,
+        "renderer": renderer,
+        "model_url": model_url,
+        "camera_position": camera_position,
+        "camera_target": camera_target,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "tts_model": tts_model,
+        "tts_voice": tts_voice,
+        "avatar": char.get("avatar", ""),
+        "profile_image": char.get("profile_image") or char.get("avatar", ""),
+        "persona_preview": persona_preview.strip(),
+    }
+
+
+def scan_config_alts_directory_rich(config_alts_dir: str) -> list[dict]:
+    """
+    Scan config_alts directory and return rich profile metadata for each character.
+
+    Returns one entry per YAML (including the base conf.yaml), with LLM/TTS/model info.
+    """
+    model_dict = _load_model_dict()
+    profiles = []
+
+    try:
+        default_config = read_yaml("conf.yaml")
+        profiles.append(_extract_rich_profile(default_config, "conf.yaml", model_dict))
+    except Exception as e:
+        logger.warning(f"Could not read conf.yaml for profiles: {e}")
+
+    for root, _, files in os.walk(config_alts_dir):
+        for file in sorted(files):
+            if file.endswith(".yaml"):
+                try:
+                    config = read_yaml(os.path.join(root, file))
+                    profiles.append(_extract_rich_profile(config, file, model_dict))
+                except Exception as e:
+                    logger.warning(f"Could not read {file} for profiles: {e}")
+
+    return profiles
+
+
 def scan_bg_directory() -> list[str]:
     bg_files = []
     bg_dir = "backgrounds"

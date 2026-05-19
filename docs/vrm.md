@@ -57,6 +57,8 @@ When the backend sends a `set-model-and-conf` message for the new model, the fro
 - You can host VRM files on CDNs such as jsDelivr or GitHub Pages. Just point the `url` directly to the remote asset.
 - The viewer exposes orbit controls, so you can drag with the mouse to rotate the character in window mode. In pet mode, pointer events obey the existing “ignore mouse” toggle.
 - Because the viewer runs on the same canvas area, existing subtitles, status widgets, and pet mode overlays still work.
+- For VRMA animation assets, place files under `frontend/models/animations/vrma` and trigger them via scene actions or UI upload.
+- To convert Mixamo FBX animations to VRMA format, use [tk256ailab/fbx2vrma-converter](https://github.com/tk256ailab/fbx2vrma-converter).
 
 If you run into issues, open the developer tools console—`VRMLoaderPlugin` will log detailed errors (missing textures, invalid VRM, etc.).  
 Feel free to adapt the component further (custom lights, animations, blending with Live2D, etc.)!

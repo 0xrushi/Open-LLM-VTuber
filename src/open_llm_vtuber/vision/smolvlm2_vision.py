@@ -33,7 +33,7 @@ class SmolVLM2Vision(VisionInterface):
                 model_cls = AutoModelForVision2Seq
         except ImportError as exc:
             raise ImportError(
-                "SmolVLM2 vision requires `transformers` and `Pillow`. "
+                "SmolVLM2 vision requires `transformers`, `Pillow`, and `torchvision`. "
                 "Install dependencies with `uv sync` after updating pyproject.toml."
             ) from exc
 

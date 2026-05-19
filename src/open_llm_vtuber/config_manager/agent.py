@@ -42,6 +42,9 @@ class BasicMemoryAgentConfig(I18nMixin, BaseModel):
     guidance_tool_router_target_servers: Optional[List[str]] = Field(
         default_factory=list, alias="guidance_tool_router_target_servers"
     )
+    obsidian_async_enabled: Optional[bool] = Field(
+        False, alias="obsidian_async_enabled"
+    )
     vision_config: VisionConfig = Field(
         default_factory=VisionConfig,
         alias="vision_config",
@@ -69,12 +72,16 @@ class BasicMemoryAgentConfig(I18nMixin, BaseModel):
             zh="为智能体启用 MCP 服务器列表",
         ),
         "guidance_tool_router_enabled": Description(
-            en="Enable a strict JSON router that decides chat vs OpenClaw-style tool calls",
-            zh="启用严格 JSON 路由器，在普通对话与 OpenClaw 风格工具调用之间进行决策",
+            en="Enable a strict JSON router that decides chat vs Obsidian-style tool calls",
+            zh="启用严格 JSON 路由器，在普通对话与 Obsidian 风格工具调用之间进行决策",
         ),
         "guidance_tool_router_target_servers": Description(
-            en="Optional MCP server allow-list for the OpenClaw router (example: ['weather', 'discord'])",
-            zh="OpenClaw 路由器可选 MCP 服务器白名单（例如 ['weather', 'discord']）",
+            en="Optional MCP server allow-list for the guidance router (example: ['obsidian', 'time'])",
+            zh="指导路由器可选 MCP 服务器白名单（例如 ['obsidian', 'time']）",
+        ),
+        "obsidian_async_enabled": Description(
+            en="Run Obsidian tool calls in the background via Redis/RQ so the VTuber can keep chatting (default: False)",
+            zh="通过 Redis/RQ 在后台运行 Obsidian 工具调用，使 VTuber 可以继续聊天（默认：False）",
         ),
         "vision_config": Description(
             en="Dedicated vision model settings for camera/screen inputs",

@@ -19,6 +19,7 @@ class CharacterConfig(I18nMixin):
     character_name: str = Field(default="", alias="character_name")
     human_name: str = Field(default="Human", alias="human_name")
     avatar: str = Field(default="", alias="avatar")
+    profile_image: str = Field(default="", alias="profile_image")
     persona_prompt: str = Field(..., alias="persona_prompt")
     agent_config: AgentConfig = Field(..., alias="agent_config")
     asr_config: ASRConfig = Field(..., alias="asr_config")
@@ -66,6 +67,9 @@ class CharacterConfig(I18nMixin):
         ),
         "avatar": Description(
             en="Avatar image path for the character", zh="角色头像图片路径"
+        ),
+        "profile_image": Description(
+            en="Profile card image path for the character (overrides 3D/2D preview in profile selector)", zh="角色卡片图片路径（在配置选择器中覆盖3D/2D预览）"
         ),
     }
 

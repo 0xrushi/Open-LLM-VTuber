@@ -68,9 +68,10 @@ character_config:
         # 'Plus' means that it has the ability to call tools by using OpenAI API.
         use_mcpp: True
         mcp_enabled_servers: ["time", "ddg-search"] # Enabled MCP servers
-        # Guidance-style strict routing: model decides chat vs openclaw tool call.
+        # Guidance-style strict routing: model decides chat vs tool call.
         guidance_tool_router_enabled: False
-        guidance_tool_router_target_servers: [] # e.g. ["weather", "discord"]
+        guidance_tool_router_target_servers: [] # e.g. ["obsidian", "time"]
+        obsidian_async_enabled: False # Set True + start Redis + RQ worker for background Obsidian calls
         # Optional dedicated vision model for camera/screen images.
         # When enabled, images are first summarized by the vision model,
         # then the summary is sent to your chat LLM as text context.
@@ -518,12 +519,14 @@ character_config:
 
     translator_config:
       # Like... you speak and read the subtitles in English, and the TTS speaks Japanese or that kind of things
-      translate_audio: False # Warning: you need to deploy DeeplX to use this. Otherwise it's going to crash
-      translate_provider: 'deeplx' # deeplx or tencent
+      translate_audio: False # Warning: ensure Gemini configuration is correct before enabling
+      translate_provider: 'gemini' # gemini or tencent
 
-      deeplx:
-        deeplx_target_lang: 'JA'
-        deeplx_api_endpoint: 'http://localhost:1188/v2/translate'
+      gemini:
+        gemini_api_key: 'Your Gemini API Key'
+        model: 'gemini-1.5-flash'
+        base_url: 'https://generativelanguage.googleapis.com/v1beta/openai/'
+        target_lang: 'Japanese'
       
       #  Tencent Text Translation  5 million characters per month  Remember to turn off post-payment, need to manually go to Machine Translation Console > System Settings to disable
       #   https://cloud.tencent.com/document/product/551/35017

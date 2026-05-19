@@ -1,17 +1,26 @@
+import asyncio
 import os
 import json
+import time
+from urllib.request import urlopen
 from uuid import uuid4
 import numpy as np
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, List
-from fastapi import APIRouter, WebSocket, UploadFile, File, Response, HTTPException
+from fastapi import APIRouter, WebSocket, UploadFile, File, Response, HTTPException, Request, Query
 from pydantic import BaseModel, Field
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, FileResponse, RedirectResponse
 from starlette.websockets import WebSocketDisconnect
 from loguru import logger
 from .service_context import ServiceContext
-from .websocket_handler import WebSocketHandler
+from .websocket_handler import WebSocketHandler, WSMessage
 from .proxy_handler import ProxyHandler
+from .config_manager.utils import scan_config_alts_directory_rich
+
+# Server-side store: client_ip → {config filename, expiry timestamp}
+# Avoids relying on browser cookie forwarding to WebSocket upgrade requests.
+_pending_profile_store: dict = {}
 
 
 class RotationPayload(BaseModel):
@@ -355,6 +364,121 @@ def init_webtool_routes(default_context_cache: ServiceContext) -> APIRouter:
                 media_type="application/json",
             )
 
+    @router.get("/api/infra/redis-health")
+    async def redis_health():
+        """Health check for Redis connectivity used by async tool queues."""
+        try:
+            from redis import Redis
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+            r = Redis.from_url(redis_url)
+            ok = bool(r.ping())
+            if ok:
+                return JSONResponse({"ok": True, "redis_url": redis_url})
+            return JSONResponse(
+                {"ok": False, "error": "Redis ping failed", "redis_url": redis_url},
+                status_code=503,
+            )
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "error": str(exc)},
+                status_code=503,
+            )
+
+    @router.get("/api/infra/workers-health")
+    async def workers_health():
+        """Health check for RQ workers consuming async tool queues."""
+        try:
+            from redis import Redis
+            from rq import Worker
+
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+            heartbeat_ttl_sec = int(os.environ.get("RQ_WORKER_HEARTBEAT_TTL", "120"))
+            required_queues = {"obsidian-tools"}
+            r = Redis.from_url(redis_url)
+
+            workers = Worker.all(connection=r)
+            alive_workers = []
+            covered_queues = set()
+            now = time.time()
+
+            for w in workers:
+                # Worker heartbeat is considered fresh if seen recently.
+                raw_last_hb = getattr(w, "last_heartbeat", None)
+                if isinstance(raw_last_hb, datetime):
+                    last_hb = raw_last_hb.timestamp()
+                elif raw_last_hb is None:
+                    last_hb = 0.0
+                else:
+                    last_hb = float(raw_last_hb)
+                is_alive = (now - last_hb) <= heartbeat_ttl_sec if last_hb else False
+                queue_names = [q.name for q in getattr(w, "queues", [])]
+                if is_alive:
+                    covered_queues.update(queue_names)
+                    alive_workers.append(
+                        {
+                            "name": getattr(w, "name", "unknown"),
+                            "queues": queue_names,
+                            "last_heartbeat": last_hb,
+                        }
+                    )
+
+            missing_queues = sorted(required_queues - covered_queues)
+            ok = len(missing_queues) == 0 and len(alive_workers) > 0
+
+            payload = {
+                "ok": ok,
+                "heartbeat_ttl_sec": heartbeat_ttl_sec,
+                "required_queues": sorted(required_queues),
+                "covered_queues": sorted(covered_queues),
+                "missing_queues": missing_queues,
+                "alive_worker_count": len(alive_workers),
+                "workers": alive_workers,
+            }
+            if ok:
+                return JSONResponse(payload)
+            return JSONResponse(payload, status_code=503)
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "error": str(exc)},
+                status_code=503,
+            )
+
+    @router.get("/api/infra/tts-health")
+    async def tts_health():
+        """Report currently configured TTS mode/endpoint for connectivity diagnostics."""
+        try:
+            tts_cfg = default_context_cache.character_config.tts_config
+            tts_model = getattr(tts_cfg, "tts_model", None)
+            if not tts_model:
+                return JSONResponse(
+                    {"ok": False, "error": "No active TTS model configured"},
+                    status_code=503,
+                )
+
+            provider_cfg = getattr(tts_cfg, tts_model.lower(), None)
+            endpoint = getattr(provider_cfg, "api_url", None) if provider_cfg else None
+            mode = "remote" if endpoint and endpoint.startswith("http") else "local"
+
+            return JSONResponse(
+                {
+                    "ok": True,
+                    "tts_model": tts_model,
+                    "mode": mode,
+                    "endpoint": endpoint,
+                    "message": (
+                        "Active TTS is remote API based."
+                        if mode == "remote"
+                        else "Active TTS is local/in-process."
+                    ),
+                }
+            )
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "error": str(exc)},
+                status_code=503,
+            )
+
     @router.websocket("/tts-ws")
     async def tts_endpoint(websocket: WebSocket):
         """WebSocket endpoint for TTS generation"""
@@ -407,5 +531,109 @@ def init_webtool_routes(default_context_cache: ServiceContext) -> APIRouter:
         except Exception as e:
             logger.error(f"Error in TTS WebSocket connection: {e}")
             await websocket.close()
+
+    return router
+
+
+_last_esp32_alert_time: float = 0.0
+_ESP32_COOLDOWN_SECONDS: float = 60.0
+_ESP32_FREE_PROMPT: str = (
+    "The user is chilling and has some free time right now. "
+    "Proactively entertain them — tell a short joke, share a fun fact, "
+    "or mention something interesting. Keep it brief and in character."
+)
+
+
+def init_esp32_routes(ws_handler: WebSocketHandler) -> APIRouter:
+    """Routes for ESP32 behavior pipeline integration.
+
+    Provides:
+        - POST /api/esp32-alert: Receive phone-usage alert and trigger VTuber speech
+    """
+    router = APIRouter()
+
+    @router.post("/api/esp32-alert")
+    async def esp32_alert(request: Request):
+        global _last_esp32_alert_time
+
+        now = time.time()
+        if now - _last_esp32_alert_time < _ESP32_COOLDOWN_SECONDS:
+            remaining = int(_ESP32_COOLDOWN_SECONDS - (now - _last_esp32_alert_time))
+            logger.info(f"ESP32 alert received but cooldown active ({remaining}s remaining)")
+            return JSONResponse({"triggered": 0, "skipped_cooldown": True, "cooldown_remaining_s": remaining})
+
+        if not ws_handler.client_connections:
+            logger.info("ESP32 alert received but no active clients")
+            return JSONResponse({"triggered": 0, "skipped_cooldown": False})
+
+        _last_esp32_alert_time = now
+        data: WSMessage = {"type": "text-input", "text": _ESP32_FREE_PROMPT}
+
+        async def _trigger_with_log(uid: str, ws):
+            try:
+                await ws_handler._handle_conversation_trigger(
+                    websocket=ws, client_uid=uid, data=data
+                )
+            except Exception as exc:
+                logger.exception(f"ESP32 alert: conversation trigger failed for {uid}: {exc}")
+
+        triggered = 0
+        for client_uid, websocket in list(ws_handler.client_connections.items()):
+            context = ws_handler.client_contexts.get(client_uid)
+            if context is None:
+                continue
+            asyncio.create_task(_trigger_with_log(client_uid, websocket))
+            triggered += 1
+
+        logger.info(f"ESP32 free-time alert triggered speech for {triggered} client(s)")
+        return JSONResponse({"triggered": triggered, "skipped_cooldown": False})
+
+    return router
+
+
+def init_profile_routes(config_alts_dir: str) -> APIRouter:
+    """
+    Routes for the profile selector UI.
+
+    Provides:
+        - GET /profiles: Serves the standalone profile selection HTML page
+        - GET /api/profiles: Returns rich profile metadata as JSON
+    """
+    router = APIRouter()
+
+    _static_dir = Path(__file__).parent / "static"
+
+    @router.get("/")
+    async def root_redirect(request: Request):
+        client_ip = request.client.host if request.client else "unknown"
+        entry = _pending_profile_store.get(client_ip)
+        if entry and entry.get("expires", 0) > time.time():
+            # Valid profile selection pending — let the static frontend handle it
+            return RedirectResponse(url="/index.html", status_code=302)
+        return RedirectResponse(url="/profiles", status_code=302)
+
+    @router.get("/profiles")
+    async def profiles_page():
+        html_path = _static_dir / "profiles.html"
+        if not html_path.exists():
+            return Response("Profile selector not found", status_code=404)
+        return FileResponse(str(html_path), media_type="text/html")
+
+    @router.get("/api/profiles")
+    async def get_profiles():
+        profiles = scan_config_alts_directory_rich(config_alts_dir)
+        # Hide the generic fallback default config; only show characters/
+        profiles = [p for p in profiles if p.get("filename") != "conf.yaml"]
+        return JSONResponse(profiles)
+
+    @router.post("/api/select-profile")
+    async def select_profile(request: Request, config: str = Query(...)):
+        client_ip = request.client.host if request.client else "unknown"
+        _pending_profile_store[client_ip] = {
+            "config": config,
+            "expires": time.time() + 30,
+        }
+        logger.info(f"Profile selected by {client_ip}: {config}")
+        return JSONResponse({"ok": True})
 
     return router

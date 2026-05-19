@@ -82,7 +82,7 @@ def actions_extractor(live2d_model: Live2dModel):
                     if not any(
                         tag.state in [TagState.START, TagState.END]
                         for tag in sentence.tags
-                    ):
+                    ) and live2d_model is not None:
                         expressions = live2d_model.extract_emotion(sentence.text)
                         if expressions:
                             actions.expressions = expressions

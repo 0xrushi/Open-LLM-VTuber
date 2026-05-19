@@ -21,6 +21,9 @@ ENGLISH README | [中文 README](https://github.com/t41372/Open-LLM-VTuber/blob/
 
 [Documentation](https://open-llm-vtuber.github.io/docs/quick-start) | [![Roadmap](https://img.shields.io/badge/Roadmap-GitHub_Project-yellow)](https://github.com/orgs/Open-LLM-VTuber/projects/2)
 
+Experimental 3D scene docs: [Nami Studio Apartment](./docs/nami-studio-apartment.md)
+VRM avatar + motion docs: [VRM Support](./docs/vrm.md) (includes FBX->VRMA converter recommendation: [tk256ailab/fbx2vrma-converter](https://github.com/tk256ailab/fbx2vrma-converter))
+
 <a href="https://trendshift.io/repositories/12358" target="_blank"><img src="https://trendshift.io/api/badge/repositories/12358" alt="t41372%2FOpen-LLM-VTuber | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 </h3>
@@ -105,6 +108,89 @@ Please refer to the [Quick Start](https://open-llm-vtuber.github.io/docs/quick-s
 
 
 
+## 🗒️ Obsidian MCP Integration (Notes, Tasks & Calendar)
+
+The VTuber can read and write your Obsidian vault — search notes, add tasks, check your daily note, and manage your calendar — all via natural voice commands.
+
+### Prerequisites
+
+| Item | Required | Notes |
+|------|----------|-------|
+| [Obsidian](https://obsidian.md) desktop app | ✅ | Must be open while the VTuber is running |
+| Obsidian CLI enabled | ✅ | Settings → General → Advanced → **Enable CLI** |
+| Embedding server | ✅ | Any OpenAI-compatible endpoint serving an embedding model (e.g. `nomic-embed-text-v1.5`). Configure `EMBED_BASE_URL` and `EMBED_MODEL` in `mcp_servers.json`. |
+| `chromadb` Python package | ✅ | Installed automatically via `uv sync` |
+| [Redis](https://redis.io) | ✅ | Required for background (non-blocking) Obsidian tool calls. Install: `brew install redis` (macOS) or `apt install redis-server` (Linux). Start: `brew services start redis`. |
+
+### Setup
+
+1. **Enable the Obsidian CLI** — open Obsidian → Settings → General → Advanced → Enable CLI.
+
+2. **Configure your vault path** in `mcp_servers.json`:
+   ```json
+   "obsidian": {
+     "env": {
+       "OBSIDIAN_VAULT_PATH": "/path/to/your/vault",
+       "EMBED_BASE_URL": "http://your-embed-server/v1",
+       "EMBED_MODEL": "nomic-embed-text-v1.5"
+     }
+   }
+   ```
+
+3. **Enable in `conf.yaml`** (already set for the default character):
+   ```yaml
+   use_mcpp: True
+   mcp_enabled_servers: ['obsidian']
+   guidance_tool_router_enabled: True
+   guidance_tool_router_target_servers: ['obsidian']
+   obsidian_async_enabled: True  # requires Redis + RQ worker
+   ```
+
+4. **Start the full local stack (recommended)**:
+   ```bash
+   ./scripts/start_all_local.command
+   ```
+   This builds web assets, then launches Redis, backend, and the worker process.
+   For Linux + xterm:
+   ```bash
+   ./scripts/start_all_local_xterm.sh
+   ```
+
+   Stop everything with:
+   ```bash
+   ./scripts/stop_all_local.command
+   ```
+
+5. **Alternative manual start** (separate terminals):
+   ```bash
+   ./scripts/start_redis.command
+   ./scripts/start_web_build.command
+   ./scripts/start_backend.command
+   ./scripts/start_workers.command
+   ```
+   Linux + xterm workers launcher:
+   ```bash
+   ./scripts/start_workers_xterm.sh
+   ```
+   > If Redis is not running, tool calls fall back to synchronous execution automatically — no crash.
+6. **RAG index note** — the index builds automatically on first run (`~/.cache/obsidian_mcp_rag/`). To force a rebuild, delete that directory.
+
+### What you can say
+
+- *"What tasks do I have today?"*
+- *"Add a reminder to call mom tomorrow."*
+- *"Search my notes for project ideas."*
+- *"What's on my calendar this week?"*
+- *"Create a note called Meeting Notes with these action items…"*
+
+### Run integration tests
+
+```bash
+uv run python -m unittest tests/test_obsidian_cli.py -v
+```
+
+---
+
 ## ☝ Update
 > :warning: `v1.0.0` has breaking changes and requires re-deployment. You *may* still update via the method below, but the `conf.yaml` file is incompatible and most of the dependencies needs to be reinstalled with `uv`. For those who came from versions before `v1.0.0`, I recommend deploy this project again with the [latest deployment guide](https://open-llm-vtuber.github.io/docs/quick-start).
 
@@ -115,7 +201,7 @@ Most files, including Python dependencies and models, are stored in the project 
 
 However, models downloaded via ModelScope or Hugging Face may also be in `MODELSCOPE_CACHE` or `HF_HOME`. While we aim to keep them in the project's `models` directory, it's good to double-check.  
 
-Review the installation guide for any extra tools you no longer need, such as `uv`, `ffmpeg`, or `deeplx`.  
+Review the installation guide for any extra tools you no longer need, such as `uv` or `ffmpeg`.  
 
 ## 🤗 Want to contribute?
 Checkout the [development guide](https://docs.llmvtuber.com/docs/development-guide/overview).
@@ -153,8 +239,3 @@ Thanks our contributors and maintainers for making this project possible.
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=t41372/open-llm-vtuber&type=Date)](https://star-history.com/#t41372/open-llm-vtuber&Date)
-
-
-
-
-

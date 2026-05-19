@@ -97,8 +97,11 @@ async def handle_sentence_output(
 
         if translate_engine:
             if len(re.sub(r'[\s.,!?，。！？\'"』」）】\s]+', "", tts_text)):
-                tts_text = translate_engine.translate(tts_text)
-            logger.info(f"🏃 Text after translation: '''{tts_text}'''...")
+                try:
+                    tts_text = translate_engine.translate(tts_text)
+                    logger.info(f"🏃 Text after translation: '''{tts_text}'''...")
+                except Exception as translate_err:
+                    logger.warning(f"⚠️ Translation failed, using original text: {translate_err}")
         else:
             logger.debug("🚫 No translation engine available. Skipping translation.")
 

@@ -1,5 +1,6 @@
 """MCP Server Manager for Open-LLM-Vtuber."""
 
+import os
 import shutil
 import json
 
@@ -83,8 +84,12 @@ class ServerRegistry:
             self.servers[server_name] = MCPServer(
                 name=server_name,
                 command=command,
-                args=server_details["args"],
-                env=server_details.get("env", None),
+                args=[os.path.expandvars(a) for a in server_details["args"]],
+                env={
+                    k: os.path.expandvars(v)
+                    for k, v in server_details.get("env", {}).items()
+                }
+                or None,
                 cwd=server_details.get("cwd", None),
                 timeout=server_details.get("timeout", None),
             )

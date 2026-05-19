@@ -19,9 +19,44 @@ from .types import WebSocketSend
 from .tts_manager import TTSTaskManager
 from ..chat_history_manager import store_message
 from ..service_context import ServiceContext
+from ..scene_action_skill import resolve_scene_action_from_text
 
 # Import necessary types from agent outputs
 from ..agent.output_types import SentenceOutput, AudioOutput
+from ..agent.output_types import Actions, DisplayText
+from ..skills.weather_timer.skill import (
+    format_timer_complete_response,
+    format_timer_set_response,
+    format_weather_response,
+    get_weather,
+    resolve_weather_timer_intent,
+)
+
+
+async def _speak_utility_text(
+    text: str,
+    context: ServiceContext,
+    websocket_send: WebSocketSend,
+    tts_manager: TTSTaskManager,
+) -> str:
+    return await process_agent_output(
+        output=SentenceOutput(
+            display_text=DisplayText(text=text),
+            tts_text=text,
+            actions=Actions(expressions=["neutral"]),
+        ),
+        character_config=context.character_config,
+        live2d_model=context.live2d_model,
+        tts_engine=context.tts_engine,
+        websocket_send=websocket_send,
+        tts_manager=tts_manager,
+        translate_engine=context.translate_engine,
+    )
+
+
+async def _complete_timer_later(context: ServiceContext, seconds: int) -> None:
+    await asyncio.sleep(seconds)
+    await context._speak_background_tool_result(format_timer_complete_response(seconds))
 
 
 async def process_single_conversation(
@@ -65,6 +100,98 @@ async def process_single_conversation(
         input_text = await process_user_input(
             user_input, context.asr_engine, websocket_send
         )
+
+        scene_action = resolve_scene_action_from_text(input_text)
+        if scene_action:
+            if context.history_uid:
+                store_message(
+                    conf_uid=context.character_config.conf_uid,
+                    history_uid=context.history_uid,
+                    role="human",
+                    content=input_text,
+                    name=context.character_config.human_name,
+                )
+            await websocket_send(
+                json.dumps(
+                    {
+                        "type": "scene-action",
+                        "action": scene_action.action,
+                        "objectId": scene_action.object_id,
+                        "sourceText": input_text,
+                    }
+                )
+            )
+            logger.info(
+                f"Handled scene action without LLM: action={scene_action.action} object={scene_action.object_id}"
+            )
+            await finalize_conversation_turn(
+                tts_manager=tts_manager,
+                websocket_send=websocket_send,
+                client_uid=client_uid,
+            )
+            return ""
+
+        utility_action = resolve_weather_timer_intent(input_text)
+        if utility_action:
+            if context.history_uid:
+                store_message(
+                    conf_uid=context.character_config.conf_uid,
+                    history_uid=context.history_uid,
+                    role="human",
+                    content=input_text,
+                    name=context.character_config.human_name,
+                )
+
+            if utility_action.kind == "weather":
+                try:
+                    weather = await asyncio.to_thread(
+                        get_weather,
+                        utility_action.location or "shadyside",
+                    )
+                    full_response = await _speak_utility_text(
+                        format_weather_response(weather),
+                        context,
+                        websocket_send,
+                        tts_manager,
+                    )
+                except Exception as exc:
+                    logger.error(f"Weather skill failed: {exc}")
+                    full_response = await _speak_utility_text(
+                        f"[sadness] [sigh] I could not get the weather right now: {exc}",
+                        context,
+                        websocket_send,
+                        tts_manager,
+                    )
+            elif utility_action.kind == "timer" and utility_action.seconds:
+                seconds = utility_action.seconds
+                asyncio.create_task(_complete_timer_later(context, seconds))
+                full_response = await _speak_utility_text(
+                    format_timer_set_response(seconds),
+                    context,
+                    websocket_send,
+                    tts_manager,
+                )
+
+            if tts_manager.task_list:
+                await asyncio.gather(*tts_manager.task_list)
+                await websocket_send(json.dumps({"type": "backend-synth-complete"}))
+
+            await finalize_conversation_turn(
+                tts_manager=tts_manager,
+                websocket_send=websocket_send,
+                client_uid=client_uid,
+            )
+
+            if context.history_uid and full_response:
+                store_message(
+                    conf_uid=context.character_config.conf_uid,
+                    history_uid=context.history_uid,
+                    role="ai",
+                    content=full_response,
+                    name=context.character_config.character_name,
+                    avatar=context.character_config.avatar,
+                )
+            return full_response
 
         # Create batch input
         batch_input = create_batch_input(

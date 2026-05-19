@@ -147,6 +147,14 @@ class WebSocketHandler:
                 websocket.send_text, client_uid
             )
 
+            pending_config = self._get_pending_config(websocket)
+            if pending_config:
+                logger.info(f"Pre-loading profile from cookie: {pending_config}")
+                try:
+                    await session_service_context.apply_config_file(pending_config)
+                except Exception as cookie_err:
+                    logger.warning(f"Could not apply cookie profile '{pending_config}': {cookie_err}")
+
             await self._store_client_data(
                 websocket, client_uid, session_service_context
             )
@@ -157,9 +165,15 @@ class WebSocketHandler:
 
             logger.info(f"Connection established for client {client_uid}")
 
+        except WebSocketDisconnect:
+            logger.info(
+                f"Client {client_uid} disconnected during connection initialization"
+            )
+            await self._cleanup_failed_connection(client_uid)
+            raise
         except Exception as e:
-            logger.error(
-                f"Failed to initialize connection for client {client_uid}: {e}"
+            logger.exception(
+                f"Failed to initialize connection for client {client_uid}: {type(e).__name__}: {e!r}"
             )
             await self._cleanup_failed_connection(client_uid)
             raise
@@ -193,7 +207,9 @@ class WebSocketHandler:
             json.dumps(
                 {
                     "type": "set-model-and-conf",
-                    "model_info": session_service_context.live2d_model.model_info,
+                    "model_info": session_service_context.live2d_model.model_info
+                    if session_service_context.live2d_model
+                    else None,
                     "conf_name": session_service_context.character_config.conf_name,
                     "conf_uid": session_service_context.character_config.conf_uid,
                     "client_uid": client_uid,
@@ -206,6 +222,22 @@ class WebSocketHandler:
 
         # Start microphone
         await websocket.send_text(json.dumps({"type": "control", "text": "start-mic"}))
+
+    def _get_pending_config(self, websocket: WebSocket) -> Optional[str]:
+        """Check the server-side store for a pending profile selection by client IP."""
+        from .routes import _pending_profile_store
+        import time
+        client_ip = websocket.client.host if websocket.client else None
+        if not client_ip:
+            return None
+        entry = _pending_profile_store.get(client_ip)
+        if entry and entry["expires"] > time.time():
+            del _pending_profile_store[client_ip]
+            logger.info(f"Found pending profile for {client_ip}: {entry['config']}")
+            return entry["config"]
+        elif entry:
+            del _pending_profile_store[client_ip]
+        return None
 
     async def _init_service_context(
         self, send_text: Callable, client_uid: str
@@ -668,7 +700,9 @@ class WebSocketHandler:
             json.dumps(
                 {
                     "type": "set-model-and-conf",
-                    "model_info": context.live2d_model.model_info,
+                    "model_info": context.live2d_model.model_info
+                    if context.live2d_model
+                    else None,
                     "conf_name": context.character_config.conf_name,
                     "conf_uid": context.character_config.conf_uid,
                     "client_uid": client_uid,

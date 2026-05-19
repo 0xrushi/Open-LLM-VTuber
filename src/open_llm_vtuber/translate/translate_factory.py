@@ -1,4 +1,4 @@
-from .deeplx import DeepLXTranslate
+from .gemini import GeminiTranslate
 from .tencent import TencentTranslate
 from .translate_interface import TranslateInterface
 
@@ -9,10 +9,12 @@ class TranslateFactory:
         translate_provider: str, translate_provider_config: dict
     ) -> TranslateInterface:
         translate_provider = translate_provider.lower()
-        if translate_provider == "deeplx":
-            return DeepLXTranslate(
-                api_endpoint=translate_provider_config.get("deeplx_api_endpoint"),
-                target_lang=translate_provider_config.get("deeplx_target_lang"),
+        if translate_provider == "gemini":
+            return GeminiTranslate(
+                api_key=translate_provider_config.get("gemini_api_key"),
+                model=translate_provider_config.get("model"),
+                base_url=translate_provider_config.get("base_url"),
+                target_lang=translate_provider_config.get("target_lang"),
             )
         elif translate_provider == "tencent":
             return TencentTranslate(

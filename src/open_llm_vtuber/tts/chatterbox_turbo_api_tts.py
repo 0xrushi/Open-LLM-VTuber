@@ -1,4 +1,7 @@
 import re
+from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qs, urlparse
+
 import requests
 from loguru import logger
 
@@ -118,11 +121,41 @@ class TTSEngine(TTSInterface):
             payload["norm_loudness"] = self.norm_loudness
         return payload
 
+    def _expired_signed_url_error(self) -> str | None:
+        if not self.reference_audio_url:
+            return None
+
+        query = parse_qs(urlparse(self.reference_audio_url).query)
+        signed_at = query.get("X-Amz-Date", [None])[0]
+        expires_in = query.get("X-Amz-Expires", [None])[0]
+        if not signed_at or not expires_in:
+            return None
+
+        try:
+            signed_time = datetime.strptime(signed_at, "%Y%m%dT%H%M%SZ").replace(
+                tzinfo=timezone.utc
+            )
+            expires_at = signed_time + timedelta(seconds=int(expires_in))
+        except (TypeError, ValueError):
+            return None
+
+        if datetime.now(timezone.utc) <= expires_at:
+            return None
+
+        return (
+            "Chatterbox Turbo reference_audio_url is an expired signed URL. "
+            f"It expired at {expires_at.isoformat()}. Use a public non-expiring "
+            "reference audio URL, refresh the signed URL, or switch tts_model to "
+            "chatterbox_tts for the local Chatterbox server."
+        )
+
     def generate_audio(self, text: str, file_name_no_ext=None):
         if not self.api_key:
             raise RuntimeError("Chatterbox Turbo API key is required.")
         if not self.reference_audio_url:
             raise RuntimeError("Chatterbox Turbo reference_audio_url is required.")
+        if expired_url_error := self._expired_signed_url_error():
+            raise RuntimeError(expired_url_error)
 
         tts_text, emotion_tags, audio_tags = self._sanitize_text(text)
         payload = self._build_payload(tts_text)

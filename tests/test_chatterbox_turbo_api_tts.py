@@ -1,6 +1,8 @@
 import os
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
+from urllib.parse import urlencode
 
 from src.open_llm_vtuber.tts.chatterbox_turbo_api_tts import TTSEngine
 
@@ -89,6 +91,28 @@ class TestChatterboxTurboAPITTS(unittest.TestCase):
             )
             with self.assertRaisesRegex(RuntimeError, "status=401"):
                 engine.generate_audio("hello")
+
+    def test_generate_audio_rejects_expired_signed_reference_url(self):
+        expired_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        signed_at = expired_at - timedelta(seconds=60)
+        query = urlencode(
+            {
+                "X-Amz-Date": signed_at.strftime("%Y%m%dT%H%M%SZ"),
+                "X-Amz-Expires": "60",
+            }
+        )
+        engine = TTSEngine(
+            api_key="SG_TEST_KEY",
+            reference_audio_url=f"https://example.com/ref.mp3?{query}",
+        )
+
+        with patch(
+            "src.open_llm_vtuber.tts.chatterbox_turbo_api_tts.requests.post"
+        ) as post:
+            with self.assertRaisesRegex(RuntimeError, "expired signed URL"):
+                engine.generate_audio("hello")
+
+        post.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Environment Editor</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <strong>Environment Editor</strong>
+          <span id="status">Ready</span>
+        </div>
+        <div class="toolbar">
+          <label class="button">
+            Import GLB
+            <input id="assetInput" type="file" accept=".glb,.gltf" multiple hidden />
+          </label>
+          <label class="button">
+            Import Project
+            <input id="projectInput" type="file" accept=".json" hidden />
+          </label>
+          <button id="saveLocations">Save Locations</button>
+          <button id="loadLocations">Load Locations</button>
+          <button id="exportConfig">Export Config</button>
+          <button id="exportGlb">Export GLB</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="panel left-panel">
+          <section>
+            <h2>Project Assets</h2>
+            <input id="assetSearch" placeholder="Search GLB assets" />
+            <div id="assetLibrary" class="asset-library"></div>
+          </section>
+          <section>
+            <h2>Objects</h2>
+            <div id="objectList" class="object-list"></div>
+          </section>
+          <section>
+            <h2>Markers</h2>
+            <div class="marker-row">
+              <button data-marker="approach">Approach</button>
+              <button data-marker="sit">Sit</button>
+              <button data-marker="lookAt">Look At</button>
+            </div>
+            <div id="markerList" class="marker-list"></div>
+          </section>
+        </aside>
+
+        <section class="viewport-wrap">
+          <canvas id="viewport"></canvas>
+          <div class="viewport-tools">
+            <button data-mode="translate" class="active">Move</button>
+            <button data-mode="rotate">Rotate Gizmo</button>
+            <button data-mode="objectControls">Object Rotate</button>
+            <button data-mode="scale">Scale</button>
+            <button id="frameSelected">Frame</button>
+            <button id="deleteSelected">Delete</button>
+          </div>
+        </section>
+
+        <aside class="panel right-panel">
+          <section>
+            <h2>Selected</h2>
+            <div id="emptyState" class="empty">Select an object or marker.</div>
+            <div id="inspector" class="inspector hidden">
+              <label>Name<input id="nameInput" /></label>
+              <label>Type<input id="typeInput" placeholder="sofa, chair, prop" /></label>
+              <label>Zone<input id="zoneInput" placeholder="LivingRoom" /></label>
+              <label>Human Name<input id="humanNameInput" /></label>
+              <label>Actions<input id="actionsInput" placeholder="inspect,moveTo,sit" /></label>
+              <div class="grid3">
+                <label>X<input id="posX" type="number" step="0.01" /></label>
+                <label>Y<input id="posY" type="number" step="0.01" /></label>
+                <label>Z<input id="posZ" type="number" step="0.01" /></label>
+              </div>
+              <div class="grid3">
+                <label>Rot X<input id="rotX" type="number" step="1" /></label>
+                <label>Rot Y<input id="rotY" type="number" step="1" /></label>
+                <label>Rot Z<input id="rotZ" type="number" step="1" /></label>
+              </div>
+              <div class="grid3">
+                <label>Scale X<input id="scaleX" type="number" step="0.01" /></label>
+                <label>Scale Y<input id="scaleY" type="number" step="0.01" /></label>
+                <label>Scale Z<input id="scaleZ" type="number" step="0.01" /></label>
+              </div>
+              <label>Color<input id="colorInput" type="color" /></label>
+              <label class="button secondary">
+                Apply Texture
+                <input id="textureInput" type="file" accept="image/*" hidden />
+              </label>
+              <button id="exportTextures">Export Selected Textures</button>
+            </div>
+          </section>
+
+          <section>
+            <h2>Project</h2>
+            <label>Scene ID<input id="sceneIdInput" value="custom_environment" /></label>
+            <label>Display Name<input id="displayNameInput" value="Custom Environment" /></label>
+            <p class="hint">Config exports object transforms, metadata, marker positions, and imported asset names.</p>
+          </section>
+
+          <section>
+            <h2>Room Block</h2>
+            <div class="grid3">
+              <label>Width<input id="roomWidthInput" type="number" step="0.1" value="8" /></label>
+              <label>Depth<input id="roomDepthInput" type="number" step="0.1" value="6" /></label>
+              <label>Height<input id="roomHeightInput" type="number" step="0.1" value="3" /></label>
+            </div>
+            <div class="grid2">
+              <label>Floor<input id="floorColorInput" type="color" value="#c99a68" /></label>
+              <label>Wall<input id="wallColorInput" type="color" value="#3d3a4d" /></label>
+            </div>
+            <label class="button secondary">
+              Floor Texture
+              <input id="floorTextureInput" type="file" accept="image/*" hidden />
+            </label>
+            <label class="button secondary">
+              Wall Texture
+              <input id="wallTextureInput" type="file" accept="image/*" hidden />
+            </label>
+            <button id="resetRoomTextures">Reset Textures</button>
+          </section>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

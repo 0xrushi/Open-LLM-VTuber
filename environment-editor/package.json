@@ -1,0 +1,17 @@
+{
+  "name": "environment-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../node_modules/vite/bin/vite.js --host 127.0.0.1",
+    "build": "node ../node_modules/vite/bin/vite.js build",
+    "preview": "node ../node_modules/vite/bin/vite.js preview --host 127.0.0.1",
+    "test": "node --test src/*.test.js"
+  },
+  "dependencies": {
+    "three": "^0.164.0",
+    "threejs-object-controls": "^1.2.8",
+    "vite": "^5.0.0"
+  }
+}

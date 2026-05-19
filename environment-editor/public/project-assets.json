@@ -1,0 +1,88 @@
+[
+  {
+    "name": "Nami_OnePiece.glb",
+    "path": "frontend/models/Nami_OnePiece.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/Nami_OnePiece.glb"
+  },
+  {
+    "name": "Thanh.glb",
+    "path": "frontend/models/Thanh.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/Thanh.glb"
+  },
+  {
+    "name": "biped_character.glb",
+    "path": "models/biped_character.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/models/biped_character.glb"
+  },
+  {
+    "name": "sofa-10.glb",
+    "path": "frontend/models/blueprint3d/sofa-10.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/sofa-10.glb"
+  },
+  {
+    "name": "armchair-19.glb",
+    "path": "frontend/models/blueprint3d/armchair-19.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/armchair-19.glb"
+  },
+  {
+    "name": "bed-1.glb",
+    "path": "frontend/models/blueprint3d/bed-1.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/bed-1.glb"
+  },
+  {
+    "name": "chair-2.glb",
+    "path": "frontend/models/blueprint3d/chair-2.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/chair-2.glb"
+  },
+  {
+    "name": "drawer-2.glb",
+    "path": "frontend/models/blueprint3d/drawer-2.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/drawer-2.glb"
+  },
+  {
+    "name": "drawer-6.glb",
+    "path": "frontend/models/blueprint3d/drawer-6.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/drawer-6.glb"
+  },
+  {
+    "name": "light-3.glb",
+    "path": "frontend/models/blueprint3d/light-3.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/light-3.glb"
+  },
+  {
+    "name": "storage-1.glb",
+    "path": "frontend/models/blueprint3d/storage-1.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/storage-1.glb"
+  },
+  {
+    "name": "table-3.glb",
+    "path": "frontend/models/blueprint3d/table-3.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/table-3.glb"
+  },
+  {
+    "name": "wardrobe-2.glb",
+    "path": "frontend/models/blueprint3d/wardrobe-2.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/blueprint3d/wardrobe-2.glb"
+  },
+  {
+    "name": "coffee-machine.glb",
+    "path": "frontend/models/house-assets/coffee-machine.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/house-assets/coffee-machine.glb"
+  },
+  {
+    "name": "corner-kitchen-unit.glb",
+    "path": "frontend/models/house-assets/corner-kitchen-unit.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/house-assets/corner-kitchen-unit.glb"
+  },
+  {
+    "name": "dining-furniture.glb",
+    "path": "frontend/models/house-assets/dining-furniture.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/house-assets/dining-furniture.glb"
+  },
+  {
+    "name": "treadmill.glb",
+    "path": "frontend/models/house-assets/treadmill.glb",
+    "url": "/@fs/Users/bread/Documents/Open-LLM-VTuber/frontend/models/house-assets/treadmill.glb",
+    "scale": 0.009
+  }
+]

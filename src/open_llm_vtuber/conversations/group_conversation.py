@@ -196,7 +196,7 @@ async def process_group_input(
     group_members: List[str],
     initiator_client_uid: str,
 ) -> str:
-    """Process and broadcast user input to group"""
+    """Process user input for group conversation"""
     input_text = await process_user_input(
         user_input, initiator_context.asr_engine, initiator_ws_send
     )

@@ -38,7 +38,7 @@ from .config_manager import (
     read_yaml,
     validate_config,
 )
-
+from .skills.pi_web_search import PI_WEB_SEARCH_SCHEMA, pi_web_search
 
 class ServiceContext:
     """Initializes, stores, and updates the asr, tts, and llm instances and other
@@ -97,7 +97,7 @@ class ServiceContext:
 
     # ==== Initializers
 
-    async def _init_mcp_components(self, use_mcpp, enabled_servers):
+    async def _init_mcp_components(self, use_mcpp, enabled_servers, obsidian_async_enabled: bool = False):
         """Initializes MCP components based on configuration, dynamically fetching tool info."""
         logger.debug(
             f"Initializing MCP components: use_mcpp={use_mcpp}, enabled_servers={enabled_servers}"
@@ -122,6 +122,9 @@ class ServiceContext:
                     "ToolAdapter not initialized before calling _init_mcp_components."
                 )
                 self.mcp_prompt = "[Error: ToolAdapter not initialized]"
+                # Still create a minimal ToolManager
+                self.tool_manager = ToolManager()
+                self._register_direct_tools()
                 return  # Exit if ToolAdapter is mandatory and not initialized
 
             try:
@@ -150,6 +153,7 @@ class ServiceContext:
                     initial_tools_dict=raw_tools_dict,
                 )
                 logger.info("ToolManager initialized with dynamically fetched tools.")
+                self._register_direct_tools()
 
             except Exception as e:
                 logger.error(
@@ -158,6 +162,9 @@ class ServiceContext:
                 # Ensure dependent components are not created if construction fails
                 self.tool_manager = None
                 self.mcp_prompt = "[Error constructing MCP tools/prompt]"
+                # Still create a minimal ToolManager
+                self.tool_manager = ToolManager()
+                self._register_direct_tools()
 
             # 4. Initialize MCPClient
             if self.mcp_server_registery:
@@ -176,7 +183,11 @@ class ServiceContext:
 
             # 5. Initialize ToolExecutor
             if self.mcp_client and self.tool_manager:
-                self.tool_executor = ToolExecutor(self.mcp_client, self.tool_manager)
+                self.tool_executor = ToolExecutor(
+                    self.mcp_client,
+                    self.tool_manager,
+                    obsidian_async_enabled=obsidian_async_enabled,
+                )
                 logger.info("ToolExecutor initialized for this session.")
             else:
                 logger.warning(
@@ -190,25 +201,62 @@ class ServiceContext:
             logger.warning(
                 "use_mcpp is True, but mcp_enabled_servers list is empty. MCP components not initialized."
             )
+            # Still create a minimal ToolManager
+            self.tool_manager = ToolManager()
+            self._register_direct_tools()
         else:
             logger.debug(
                 "MCP components not initialized (use_mcpp is False or no enabled servers)."
             )
+            # Still create a minimal ToolManager
+            self.tool_manager = ToolManager()
+            self._register_direct_tools()
+
+    def _register_direct_tools(self) -> None:
+        """Register direct-call Python tools with the ToolManager."""
+        tm = self.tool_manager
+        if not tm:
+            return
+        tm.register_direct_tool(
+            name="pi_web_search",
+            func=pi_web_search,
+            openai_schema=PI_WEB_SEARCH_SCHEMA,
+            claude_schema=PI_WEB_SEARCH_SCHEMA,
+            description="Search the web using pi-agent skills.",
+        )
 
     async def _speak_background_tool_result(self, text: str) -> None:
         """Speak async MCP tool result directly through the current client TTS pipeline."""
         normalized = (text or "").strip()
+        logger.info(f"[BG_TTS_START] Attempting background TTS (len={len(normalized)}, active_turns={self._active_turns})")
         if not normalized:
+            logger.info("[BG_TTS_SKIP] Empty text, skipping")
             return
-        await self.wait_until_turn_idle()
+        # Defer briefly until idle so background result TTS does not interrupt an active turn.
+        # If the user keeps chatting, skip stale background speech instead of blocking.
+        if self._active_turns > 0:
+            logger.info(
+                "[BG_TTS_DEFER] Deferring background TTS until current turn is idle."
+            )
+            try:
+                await asyncio.wait_for(self._turn_idle_event.wait(), timeout=120.0)
+                logger.info("[BG_TTS_RESUMED] Turn is now idle, resuming background TTS")
+            except asyncio.TimeoutError:
+                logger.info("[BG_TTS_SKIP] Skipping stale background TTS: still in active turn after 120s timeout.")
+                return
+        # Keep background speech concise so it cannot monopolize TTS.
+        if len(normalized) > 700:
+            logger.info(f"[BG_TTS_TRUNC] Truncating result from {len(normalized)} to 700 chars")
+            normalized = normalized[:700].rstrip() + " ..."
         if not self.send_text:
-            logger.warning("Cannot speak background tool result: send_text unavailable.")
+            logger.warning("[BG_TTS_ERROR] Cannot speak background tool result: send_text unavailable.")
             return
         if not self.tts_engine:
-            logger.warning("Cannot speak background tool result: TTS engine unavailable.")
+            logger.warning("[BG_TTS_ERROR] Cannot speak background tool result: TTS engine unavailable.")
             return
 
         try:
+            logger.info("[BG_TTS_PROCESSING] Starting background TTS processing")
             from .agent.output_types import DisplayText, Actions
             from .conversations.tts_manager import TTSTaskManager
 
@@ -312,6 +360,7 @@ class ServiceContext:
         await self._init_mcp_components(
             self.character_config.agent_config.agent_settings.basic_memory_agent.use_mcpp,
             self.character_config.agent_config.agent_settings.basic_memory_agent.mcp_enabled_servers,
+            obsidian_async_enabled=self.character_config.agent_config.agent_settings.basic_memory_agent.obsidian_async_enabled or False,
         )
 
         logger.debug(f"Loaded service context with cache: {character_config}")
@@ -364,6 +413,7 @@ class ServiceContext:
         await self._init_mcp_components(
             config.character_config.agent_config.agent_settings.basic_memory_agent.use_mcpp,
             config.character_config.agent_config.agent_settings.basic_memory_agent.mcp_enabled_servers,
+            obsidian_async_enabled=config.character_config.agent_config.agent_settings.basic_memory_agent.obsidian_async_enabled or False,
         )
 
         # init agent from character config
@@ -387,6 +437,7 @@ class ServiceContext:
             self.live2d_model = Live2dModel(live2d_model_name)
             self.character_config.live2d_model_name = live2d_model_name
         except Exception as e:
+            self.live2d_model = None
             logger.critical(f"Error initializing Live2D: {e}")
             logger.critical("Try to proceed without Live2D...")
 
@@ -525,6 +576,11 @@ class ServiceContext:
             prompt_content = prompt_loader.load_util(prompt_file)
 
             if prompt_name == "live2d_expression_prompt":
+                if self.live2d_model is None:
+                    logger.warning(
+                        "Skipping live2d_expression_prompt because no Live2D model is loaded."
+                    )
+                    continue
                 prompt_content = prompt_content.replace(
                     "[<insert_emomap_keys>]", self.live2d_model.emo_str
                 )
@@ -538,6 +594,29 @@ class ServiceContext:
         logger.debug(persona_prompt)
 
         return persona_prompt
+
+    async def apply_config_file(self, config_file_name: str) -> None:
+        """
+        Load a config file and update service context engines silently (no WS messages).
+        Used for pre-connection config selection (e.g. profile selector cookie).
+        """
+        if config_file_name == "conf.yaml":
+            new_character_config_data = read_yaml("conf.yaml").get("character_config")
+        else:
+            characters_dir = self.system_config.config_alts_dir
+            file_path = os.path.normpath(os.path.join(characters_dir, config_file_name))
+            if not file_path.startswith(characters_dir):
+                raise ValueError("Invalid configuration file path")
+            alt_config_data = self._load_and_validate_alt_character_config(file_path)
+            new_character_config_data = deep_merge(
+                self.config.character_config.model_dump(), alt_config_data
+            )
+        if new_character_config_data:
+            new_config = {
+                "system_config": self.system_config.model_dump(),
+                "character_config": new_character_config_data,
+            }
+            await self.load_from_config(validate_config(new_config))
 
     async def handle_config_switch(
         self,
@@ -569,7 +648,7 @@ class ServiceContext:
                 if not file_path.startswith(characters_dir):
                     raise ValueError("Invalid configuration file path")
 
-                alt_config_data = read_yaml(file_path).get("character_config")
+                alt_config_data = self._load_and_validate_alt_character_config(file_path)
 
                 # Start with original config data and perform a deep merge
                 new_character_config_data = deep_merge(
@@ -593,7 +672,9 @@ class ServiceContext:
                     json.dumps(
                         {
                             "type": "set-model-and-conf",
-                            "model_info": self.live2d_model.model_info,
+                            "model_info": self.live2d_model.model_info
+                            if self.live2d_model
+                            else None,
                             "conf_name": self.character_config.conf_name,
                             "conf_uid": self.character_config.conf_uid,
                         }
@@ -627,6 +708,25 @@ class ServiceContext:
                 )
             )
             raise e
+
+    def _load_and_validate_alt_character_config(self, file_path: str) -> dict:
+        """Load a character override file and enforce required instruction overrides."""
+        loaded = read_yaml(file_path) or {}
+        alt_config_data = loaded.get("character_config")
+        if not isinstance(alt_config_data, dict):
+            raise ValueError(
+                f"Invalid character config in {file_path}: missing 'character_config' object."
+            )
+
+        # Character profiles must explicitly override persona instructions from base conf.
+        persona_prompt = alt_config_data.get("persona_prompt")
+        if not isinstance(persona_prompt, str) or not persona_prompt.strip():
+            raise ValueError(
+                f"Invalid character config in {file_path}: "
+                "'character_config.persona_prompt' must be explicitly set and non-empty."
+            )
+
+        return alt_config_data
 
 
 def deep_merge(dict1, dict2):

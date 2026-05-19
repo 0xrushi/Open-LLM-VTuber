@@ -36,17 +36,24 @@ class BasicMemoryAgent(AgentInterface):
     """Agent with basic chat memory and tool calling support."""
 
     _system: str = "You are a helpful assistant."
-    _OPENCLAW_ROUTER_SYSTEM_PROMPT: str = (
-        "You are a strict intent router for an OpenClaw tool bridge.\n"
+    _GUIDANCE_ROUTER_SYSTEM_PROMPT: str = (
+        "You are a strict intent router for an AI assistant tool bridge.\n"
         "Return JSON only with this schema:\n"
         "{\n"
-        '  "mode": "chat" | "openclaw_tool_call",\n'
-        '  "capability": "weather" | "discord_messages" | null,\n'
+        '  "mode": "chat" | "tool_call",\n'
+        '  "capability": "notes" | "todos" | "calendar" | "web_search" | "discord" | "twitter" | null,\n'
         '  "reason": "short reason",\n'
         '  "query": "query to send to selected tool or empty string"\n'
         "}\n"
-        "Choose openclaw_tool_call only when the user explicitly asks for weather or discord messages.\n"
-        "For every other case choose chat."
+        "Choose tool_call when the user wants to:\n"
+        "  - notes: save, read, search, or list personal notes or memos\n"
+        "  - todos: add, complete, list, or manage to-do items or tasks\n"
+        "  - calendar: add, check, list, or manage calendar events, agenda, or schedule\n"
+        "  - web_search: search the web, find current news, look up recent information,\n"
+        "    research a topic online, or fetch content from a URL\n"
+        "  - discord: search, recall, or look up messages from Discord chat history\n"
+        "  - twitter: search, recall, or look up Twitter/X links and summaries from ingestion history\n"
+        "For every other case choose chat and set capability to null."
     )
 
     def __init__(
@@ -150,13 +157,17 @@ class BasicMemoryAgent(AgentInterface):
                 return "\n".join(part for part in parts if part).strip()
         return ""
 
-    def _categorize_openclaw_tools(
+    def _categorize_guidance_tools(
         self, tools: List[Dict[str, Any]]
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """Build tool buckets for openclaw capabilities."""
+        """Build tool buckets for guidance router capabilities."""
         categorized: Dict[str, List[Dict[str, Any]]] = {
-            "weather": [],
-            "discord_messages": [],
+            "notes": [],
+            "todos": [],
+            "calendar": [],
+            "web_search": [],
+            "discord": [],
+            "twitter": [],
         }
         if not tools:
             return categorized
@@ -183,37 +194,57 @@ class BasicMemoryAgent(AgentInterface):
             tool_params = json.dumps(function_data.get("parameters", {})).lower()
             haystack = f"{tool_name} {tool_desc} {tool_params}"
 
-            weather_keywords = [
-                "weather",
-                "forecast",
-                "temperature",
-                "humidity",
-                "wind",
-                "rain",
-                "snow",
-                "location",
-                "city",
+            notes_keywords = [
+                "note", "notes", "memo", "memos", "journal", "write", "save", "record",
+                "jot", "notebook", "snippet",
+            ]
+            todos_keywords = [
+                "todo", "todos", "to-do", "task", "tasks", "checklist", "remind",
+                "reminder", "action item", "complete", "done", "pending",
+            ]
+            calendar_keywords = [
+                "calendar", "event", "schedule", "appointment", "meeting", "booking",
+                "date", "time slot", "agenda", "recurring",
+            ]
+            web_search_keywords = [
+                "web", "browse", "fetch", "url", "internet", "online",
+                "news", "current", "latest", "headless browser",
             ]
             discord_keywords = [
-                "discord",
-                "guild",
-                "channel",
-                "message",
-                "dm",
-                "server",
-                "thread",
+                "discord", "discord_search", "discord_sync", "discord message",
+                "chat history", "server message",
+            ]
+            twitter_keywords = [
+                "twitter", "x.com", "tweet", "tweets", "twitter_search", "twitter_sync",
+                "twitter/x", "x post",
             ]
 
-            if any(keyword in haystack for keyword in weather_keywords):
-                categorized["weather"].append(tool)
+            matched = False
+            if any(keyword in haystack for keyword in notes_keywords):
+                categorized["notes"].append(tool)
+                matched = True
+            if any(keyword in haystack for keyword in todos_keywords):
+                categorized["todos"].append(tool)
+                matched = True
+            if any(keyword in haystack for keyword in calendar_keywords):
+                categorized["calendar"].append(tool)
+                matched = True
+            # Direct tools (web browse) always land in web_search regardless of keywords
+            if related_server == "direct" or any(keyword in haystack for keyword in web_search_keywords):
+                categorized["web_search"].append(tool)
+                matched = True
             if any(keyword in haystack for keyword in discord_keywords):
-                categorized["discord_messages"].append(tool)
+                categorized["discord"].append(tool)
+                matched = True
+            if any(keyword in haystack for keyword in twitter_keywords):
+                categorized["twitter"].append(tool)
+                matched = True
 
-            if related_server:
-                if "weather" in related_server:
-                    categorized["weather"].append(tool)
-                if "discord" in related_server:
-                    categorized["discord_messages"].append(tool)
+            # Generic tools that don't match any specific keyword
+            # but can handle any intent — add them to all buckets as fallback.
+            if not matched and related_server in self._guidance_tool_router_target_servers:
+                for bucket in categorized:
+                    categorized[bucket].append(tool)
 
         for key in categorized:
             deduped = []
@@ -256,12 +287,12 @@ class BasicMemoryAgent(AgentInterface):
                     filtered.append(tool)
         return filtered
 
-    async def _run_openclaw_router(
+    async def _run_guidance_router(
         self,
         messages: List[Dict[str, Any]],
         categorized_tools: Dict[str, List[Dict[str, Any]]],
     ) -> Dict[str, Any]:
-        """Run a strict JSON router pass for chat vs openclaw tool call."""
+        """Run a strict JSON router pass for chat vs tool call."""
         if not isinstance(self._llm, OpenAICompatibleAsyncLLM):
             return {
                 "mode": "chat",
@@ -280,21 +311,41 @@ class BasicMemoryAgent(AgentInterface):
 
         user_text = self._extract_latest_user_text(messages)
         available_tool_names = {
-            "weather": [
+            "notes": [
                 t.get("function", {}).get("name", "")
-                for t in categorized_tools.get("weather", [])
+                for t in categorized_tools.get("notes", [])
             ],
-            "discord_messages": [
+            "todos": [
                 t.get("function", {}).get("name", "")
-                for t in categorized_tools.get("discord_messages", [])
+                for t in categorized_tools.get("todos", [])
+            ],
+            "calendar": [
+                t.get("function", {}).get("name", "")
+                for t in categorized_tools.get("calendar", [])
+            ],
+            "web_search": [
+                t.get("function", {}).get("name", "")
+                for t in categorized_tools.get("web_search", [])
+            ],
+            "discord": [
+                t.get("function", {}).get("name", "")
+                for t in categorized_tools.get("discord", [])
+            ],
+            "twitter": [
+                t.get("function", {}).get("name", "")
+                for t in categorized_tools.get("twitter", [])
             ],
         }
 
         router_prompt = (
             f"User message:\n{user_text}\n\n"
-            f"Available weather tools: {available_tool_names['weather']}\n"
-            f"Available discord tools: {available_tool_names['discord_messages']}\n"
-            "If capability is unavailable, choose mode='chat'."
+            f"Available notes tools: {available_tool_names['notes']}\n"
+            f"Available todos tools: {available_tool_names['todos']}\n"
+            f"Available calendar tools: {available_tool_names['calendar']}\n"
+            f"Available web search tools: {available_tool_names['web_search']}\n"
+            f"Available discord tools: {available_tool_names['discord']}\n"
+            f"Available twitter tools: {available_tool_names['twitter']}\n"
+            "If the needed capability has no tools listed, choose mode='chat'."
         )
 
         response = await self._llm.client.chat.completions.create(
@@ -303,20 +354,20 @@ class BasicMemoryAgent(AgentInterface):
             response_format={
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "openclaw_router_decision",
+                    "name": "guidance_router_decision",
                     "strict": True,
                     "schema": {
                         "type": "object",
                         "properties": {
                             "mode": {
                                 "type": "string",
-                                "enum": ["chat", "openclaw_tool_call"],
+                                "enum": ["chat", "tool_call"],
                             },
                             "capability": {
                                 "anyOf": [
                                     {
                                         "type": "string",
-                                        "enum": ["weather", "discord_messages"],
+                                        "enum": ["notes", "todos", "calendar", "web_search", "discord", "twitter"],
                                     },
                                     {"type": "null"},
                                 ]
@@ -330,7 +381,7 @@ class BasicMemoryAgent(AgentInterface):
                 },
             },
             messages=[
-                {"role": "system", "content": self._OPENCLAW_ROUTER_SYSTEM_PROMPT},
+                {"role": "system", "content": self._GUIDANCE_ROUTER_SYSTEM_PROMPT},
                 {"role": "user", "content": router_prompt},
             ],
         )
@@ -340,26 +391,26 @@ class BasicMemoryAgent(AgentInterface):
             router_raw = response.choices[0].message.content or ""
 
         if not router_raw:
-            raise RuntimeError("OpenClaw router returned an empty response.")
+            raise RuntimeError("Guidance router returned an empty response.")
 
         try:
             decision = json.loads(router_raw)
         except json.JSONDecodeError as exc:
             raise RuntimeError(
-                f"OpenClaw router produced invalid JSON: {router_raw}"
+                f"Guidance router produced invalid JSON: {router_raw}"
             ) from exc
 
         mode = decision.get("mode")
         capability = decision.get("capability")
-        if mode not in {"chat", "openclaw_tool_call"}:
-            raise RuntimeError(f"OpenClaw router produced invalid mode: {mode}")
-        if capability not in {"weather", "discord_messages", None}:
+        if mode not in {"chat", "tool_call"}:
+            raise RuntimeError(f"Guidance router produced invalid mode: {mode}")
+        if capability not in {"notes", "todos", "calendar", "web_search", "discord", "twitter", None}:
             raise RuntimeError(
-                f"OpenClaw router produced invalid capability: {capability}"
+                f"Guidance router produced invalid capability: {capability}"
             )
-        if mode == "openclaw_tool_call" and capability is None:
+        if mode == "tool_call" and capability is None:
             raise RuntimeError(
-                "OpenClaw router selected openclaw_tool_call but no capability."
+                "Guidance router selected tool_call but no capability."
             )
         return decision
 
@@ -956,13 +1007,13 @@ class BasicMemoryAgent(AgentInterface):
                 and self._guidance_tool_router_enabled
                 and tools
             ):
-                categorized_tools = self._categorize_openclaw_tools(tools)
-                router_decision = await self._run_openclaw_router(
+                categorized_tools = self._categorize_guidance_tools(tools)
+                router_decision = await self._run_guidance_router(
                     messages, categorized_tools
                 )
-                logger.info(f"OpenClaw router decision: {router_decision}")
+                logger.info(f"Guidance router decision: {router_decision}")
 
-                if router_decision.get("mode") == "openclaw_tool_call":
+                if router_decision.get("mode") == "tool_call":
                     capability = router_decision.get("capability")
                     selected_tools = categorized_tools.get(capability, [])
                     if not selected_tools:
@@ -974,7 +1025,7 @@ class BasicMemoryAgent(AgentInterface):
                             selected_tools = fallback_tools
                         else:
                             raise RuntimeError(
-                                f"OpenClaw router selected capability '{capability}', but no matching tools are available."
+                                f"Guidance router selected capability '{capability}', but no matching tools are available."
                             )
 
                     logger.debug(
@@ -987,7 +1038,7 @@ class BasicMemoryAgent(AgentInterface):
                     return
 
                 logger.debug(
-                    "OpenClaw router selected normal chat path, running simple completion."
+                    "Guidance router selected normal chat path, running simple completion."
                 )
                 token_stream = self._llm.chat_completion(messages, self._system)
                 complete_response = ""

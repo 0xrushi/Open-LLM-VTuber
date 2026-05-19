@@ -60,11 +60,19 @@
         "description": "Sample VRM avatar served from the frontend/models folder",
         "renderer": "vrm",
         "url": "/models/testavatar1.vrm",
-        "kScale": 1,
+        "kScale": 0.88,
         "initialXshift": 0,
         "initialYshift": 0,
-        "cameraPosition": [0, 1.3, 1.8],
-        "cameraTarget": [0, 1.3, 0],
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
         "autoRotate": true,
         "emotionMap": {},
         "tapMotions": {}
@@ -74,11 +82,19 @@
         "description": "Legacy alias for the sample VRM avatar",
         "renderer": "vrm",
         "url": "/models/testavatar1.vrm",
-        "kScale": 1,
+        "kScale": 0.88,
         "initialXshift": 0,
         "initialYshift": 0,
-        "cameraPosition": [0, 1.3, 1.8],
-        "cameraTarget": [0, 1.3, 0],
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
         "autoRotate": true,
         "emotionMap": {},
         "tapMotions": {}
@@ -88,11 +104,19 @@
         "description": "GLB male model from mediapipe-avatar (for testing)",
         "renderer": "vrm",
         "url": "/models/male.glb",
-        "kScale": 1,
+        "kScale": 0.88,
         "initialXshift": 0,
         "initialYshift": 0,
-        "cameraPosition": [0, 1.3, 1.8],
-        "cameraTarget": [0, 1.3, 0],
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
         "autoRotate": true,
         "emotionMap": {},
         "tapMotions": {}
@@ -102,11 +126,19 @@
         "description": "Lyra Casual Outfit (GLB)",
         "renderer": "vrm",
         "url": "/models/Lyra Casual Outfit.glb",
-        "kScale": 1,
+        "kScale": 0.88,
         "initialXshift": 0,
         "initialYshift": 0,
-        "cameraPosition": [0, 1.3, 1.8],
-        "cameraTarget": [0, 1.3, 0],
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
         "autoRotate": false,
         "emotionMap": {},
         "tapMotions": {}
@@ -116,11 +148,19 @@
         "description": "Custom Biped GLB character",
         "renderer": "vrm",
         "url": "/models/biped_character.glb",
-        "kScale": 1,
+        "kScale": 0.88,
         "initialXshift": 0,
         "initialYshift": 0,
-        "cameraPosition": [0, 1.3, 1.8],
-        "cameraTarget": [0, 1.3, 0],
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
         "autoRotate": true,
         "emotionMap": {},
         "tapMotions": {}
@@ -130,11 +170,19 @@
         "description": "Character Blue GLB with many animations",
         "renderer": "vrm",
         "url": "/models/character_blue.glb",
-        "kScale": 1,
+        "kScale": 0.88,
         "initialXshift": 0,
         "initialYshift": 0,
-        "cameraPosition": [0, 1.3, 1.8],
-        "cameraTarget": [0, 1.3, 0],
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
         "autoRotate": true,
         "emotionMap": {},
         "tapMotions": {}
@@ -144,11 +192,211 @@
         "description": "Thanh (GLB) with embedded skeletal animations",
         "renderer": "vrm",
         "url": "/models/Thanh.glb",
-        "kScale": 1,
+        "kScale": 0.88,
         "initialXshift": 0,
         "initialYshift": 0,
-        "cameraPosition": [0, 1.3, 1.8],
-        "cameraTarget": [0, 1.3, 0],
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
+        "autoRotate": false,
+        "emotionMap": {},
+        "tapMotions": {}
+    },
+    {
+        "name": "nami_byKitzoomer",
+        "description": "Nami VRM avatar by Kitzoomer",
+        "renderer": "vrm",
+        "url": "/models/Nami_byKitzoomer.vrm",
+        "kScale": 0.88,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "vrmPosZ": 0.85,
+        "cameraPosition": [
+            0,
+            1.8,
+            5.8
+        ],
+        "cameraTarget": [
+            0,
+            1.1,
+            0
+        ],
+        "scenePreset": "nami_studio_apartment",
+        "backgroundColor": "#ffc983",
+        "autoRotate": false,
+        "emotionMap": {},
+        "tapMotions": {},
+        "sceneGlb": "/models/environments/nami-authored-environment.glb",
+        "sceneGlbPosition": [
+            0,
+            0,
+            0
+        ],
+        "sceneGlbRotation": [
+            0,
+            0,
+            0
+        ],
+        "sceneGlbScale": 1
+    },
+    {
+        "name": "Nami",
+        "description": "Nami Mixamo VRM (user-provided)",
+        "renderer": "vrm",
+        "url": "/models/Nami_mixamo.vrm",
+        "kScale": 0.88,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "vrmPosZ": 0.85,
+        "cameraPosition": [
+            0,
+            1.8,
+            5.8
+        ],
+        "cameraTarget": [
+            0,
+            1.1,
+            0
+        ],
+        "scenePreset": "nami_studio_apartment",
+        "backgroundColor": "#ffc983",
+        "autoRotate": false,
+        "emotionMap": {},
+        "tapMotions": {},
+        "sceneGlb": "/models/environments/nami-authored-environment.glb",
+        "sceneGlbPosition": [
+            0,
+            0,
+            0
+        ],
+        "sceneGlbRotation": [
+            0,
+            0,
+            0
+        ],
+        "sceneGlbScale": 1
+    },
+    {
+        "name": "Yidhari",
+        "description": "Yidhari VRM (user-provided)",
+        "renderer": "vrm",
+        "url": "/models/Yidhari.vrm",
+        "kScale": 0.88,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "vrmPosZ": 0.85,
+        "cameraPosition": [
+            0,
+            1.8,
+            5.8
+        ],
+        "cameraTarget": [
+            0,
+            1.1,
+            0
+        ],
+        "scenePreset": "nami_studio_apartment",
+        "backgroundColor": "#ffc983",
+        "autoRotate": false,
+        "emotionMap": {},
+        "tapMotions": {},
+        "sceneGlb": "/models/environments/nami-authored-environment.glb",
+        "sceneGlbPosition": [
+            0,
+            0,
+            0
+        ],
+        "sceneGlbRotation": [
+            0,
+            0,
+            0
+        ],
+        "sceneGlbScale": 1
+    },
+    {
+        "name": "Hugo",
+        "description": "Hugo ZZZ VRM model",
+        "renderer": "vrm",
+        "url": "/models/Zenless Zone Zero Hugo Vlad.vrm",
+        "kScale": 0.88,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "vrmPosZ": 0.85,
+        "cameraPosition": [
+            0,
+            1.8,
+            5.8
+        ],
+        "cameraTarget": [
+            0,
+            1.1,
+            0
+        ],
+        "scenePreset": "nami_studio_apartment",
+        "backgroundColor": "#ffc983",
+        "autoRotate": false,
+        "emotionMap": {},
+        "tapMotions": {},
+        "sceneGlb": "/models/environments/nami-authored-environment.glb",
+        "sceneGlbPosition": [
+            0,
+            0,
+            0
+        ],
+        "sceneGlbRotation": [
+            0,
+            0,
+            0
+        ],
+        "sceneGlbScale": 1
+    },
+    {
+        "name": "Diluc",
+        "description": "Diluc Ragnvindr - The Darkfire Knight of Mondstadt (Genshin Impact)",
+        "renderer": "vrm",
+        "url": "/models/Diluc.glb",
+        "kScale": 0.88,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
+        "autoRotate": false,
+        "emotionMap": {},
+        "tapMotions": {}
+    },
+    {
+        "name": "SailorMoon",
+        "description": "Usagi Tsukino - Sailor Moon (Genshin Impact-style 3D model)",
+        "renderer": "vrm",
+        "url": "/models/Usagi.glb",
+        "kScale": 0.88,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "cameraPosition": [
+            0,
+            1.3,
+            1.8
+        ],
+        "cameraTarget": [
+            0,
+            1.3,
+            0
+        ],
         "autoRotate": false,
         "emotionMap": {},
         "tapMotions": {}

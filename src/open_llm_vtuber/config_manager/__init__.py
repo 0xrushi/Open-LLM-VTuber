@@ -42,7 +42,7 @@ from .vad import (
     VADConfig,
     SileroVADConfig,
 )
-from .tts_preprocessor import TTSPreprocessorConfig, TranslatorConfig, DeepLXConfig
+from .tts_preprocessor import TTSPreprocessorConfig, TranslatorConfig, GeminiTranslateConfig
 from .i18n import I18nMixin, Description, MultiLingualString
 from .agent import (
     AgentConfig,
@@ -114,7 +114,7 @@ __all__ = [
     # TTS preprocessor related classes
     "TTSPreprocessorConfig",
     "TranslatorConfig",
-    "DeepLXConfig",
+    "GeminiTranslateConfig",
     # i18n related classes
     "I18nMixin",
     "Description",

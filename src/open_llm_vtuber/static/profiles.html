@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Select Profile — Open-LLM-VTuber</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d12;
+      --surface: #16161f;
+      --surface2: #1e1e2a;
+      --border: rgba(255,255,255,0.07);
+      --accent: #7c6aff;
+      --accent2: #a78bfa;
+      --text: #e2e2f0;
+      --muted: #8888aa;
+      --card-w: 280px;
+      --preview-h: 220px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 2rem 2rem 1rem;
+      text-align: center;
+    }
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      background: linear-gradient(135deg, #a78bfa, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    header p {
+      margin-top: 0.4rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    #grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      justify-content: center;
+      padding: 1.5rem 2rem 3rem;
+      flex: 1;
+    }
+
+    .card {
+      width: var(--card-w);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      position: relative;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 36px rgba(124,106,255,0.22);
+      border-color: rgba(124,106,255,0.45);
+    }
+    .card:active { transform: translateY(-1px); }
+
+    /* ripple on click */
+    .card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      background: radial-gradient(circle at center, rgba(124,106,255,0.18) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    .card.selected::after { opacity: 1; }
+
+    .preview {
+      width: 100%;
+      height: var(--preview-h);
+      background: var(--surface2);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      display: block;
+    }
+
+    /* placeholder shown while loading / Live2D fallback */
+    .preview .placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .preview .avatar-circle {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      box-shadow: 0 4px 20px rgba(124,106,255,0.4);
+      flex-shrink: 0;
+    }
+    .preview .placeholder-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .spin {
+      width: 28px; height: 28px;
+      border: 3px solid rgba(124,106,255,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .info {
+      padding: 0.9rem 1rem 1rem;
+    }
+    .info h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .info .persona {
+      margin-top: 0.35rem;
+      font-size: 0.73rem;
+      color: var(--muted);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.55rem;
+    }
+    .badge {
+      font-size: 0.65rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--muted);
+      background: var(--surface2);
+      white-space: nowrap;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .badge.llm { border-color: rgba(99,102,241,0.35); color: #a5b4fc; }
+    .badge.tts { border-color: rgba(16,185,129,0.3); color: #6ee7b7; }
+    .badge.model { border-color: rgba(245,158,11,0.3); color: #fcd34d; }
+
+    /* global loading / error */
+    #status {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      flex: 1;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .model-indicator {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 0.6rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      background: rgba(0,0,0,0.5);
+      color: rgba(255,255,255,0.5);
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Choose a Profile</h1>
+  <p>Select a character to launch the VTuber session</p>
+</header>
+
+<div id="status">
+  <div class="spin"></div>
+  <span>Loading profiles…</span>
+</div>
+
+<div id="grid" style="display:none"></div>
+
+<script type="module">
+// ── Three.js + VRM loader from CDN ───────────────────────────────────────────
+const THREE_VER  = '0.163.0';
+const THREE_CDN  = `https://cdn.jsdelivr.net/npm/three@${THREE_VER}`;
+const VRM_CDN    = `https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.1/lib`;
+
+let THREE, GLTFLoader, VRMLoaderPlugin;
+
+async function loadDeps() {
+  THREE = await import(`${THREE_CDN}/build/three.module.min.js`);
+
+  const loaderMod = await import(
+    `${THREE_CDN}/examples/jsm/loaders/GLTFLoader.js`
+  ).catch(() => null);
+
+  if (loaderMod) {
+    GLTFLoader = loaderMod.GLTFLoader;
+  }
+
+  const vrmMod = await import(`${VRM_CDN}/three-vrm.module.min.js`).catch(() => null);
+  if (vrmMod) {
+    VRMLoaderPlugin = vrmMod.VRMLoaderPlugin;
+  }
+}
+
+// ── Shared offscreen renderer ────────────────────────────────────────────────
+let sharedRenderer = null;
+
+function getRenderer() {
+  if (sharedRenderer) return sharedRenderer;
+  if (!THREE) return null;
+  try {
+    sharedRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    sharedRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    sharedRenderer.outputColorSpace = THREE.SRGBColorSpace;
+    return sharedRenderer;
+  } catch {
+    return null;
+  }
+}
+
+async function renderVRMSnapshot(modelUrl, camPos, camTarget, width = 280, height = 220) {
+  if (!THREE || !GLTFLoader) return null;
+  const renderer = getRenderer();
+  if (!renderer) return null;
+
+  renderer.setSize(width, height, false);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x16161f);
+
+  // Lighting
+  const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+  scene.add(ambient);
+  const dir = new THREE.DirectionalLight(0xffffff, 1.8);
+  dir.position.set(1.5, 3, 2);
+  scene.add(dir);
+  const fill = new THREE.DirectionalLight(0x8080ff, 0.4);
+  fill.position.set(-2, 1, -1);
+  scene.add(fill);
+
+  // Camera
+  const camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 50);
+  if (camPos && camPos.length === 3) {
+    camera.position.set(...camPos);
+  } else {
+    camera.position.set(0, 1.4, 1.7);
+  }
+  if (camTarget && camTarget.length === 3) {
+    camera.lookAt(...camTarget);
+  } else {
+    camera.lookAt(0, 1.25, 0);
+  }
+
+  // Load model
+  const loader = new GLTFLoader();
+  if (VRMLoaderPlugin) {
+    loader.register(parser => new VRMLoaderPlugin(parser));
+  }
+
+  let gltf;
+  try {
+    gltf = await new Promise((res, rej) => {
+      loader.load(modelUrl, res, undefined, rej);
+    });
+  } catch {
+    return null;
+  }
+
+  const model = gltf.scene || gltf.userData?.vrm?.scene;
+  if (!model) return null;
+
+  // Auto-scale: fit into a 2-unit bounding box
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim > 0) model.scale.setScalar(2 / maxDim);
+
+  // Re-center vertically after scaling
+  box.setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  model.position.sub(center);
+  model.position.y += box.getSize(new THREE.Vector3()).y / 2;
+
+  scene.add(model);
+
+  renderer.render(scene, camera);
+
+  const dataUrl = renderer.domElement.toDataURL('image/webp', 0.88);
+
+  // Dispose geometry / materials to free memory
+  model.traverse(obj => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(m => m.dispose());
+    }
+  });
+
+  return dataUrl;
+}
+
+// ── Build card DOM ───────────────────────────────────────────────────────────
+function initials(name) {
+  return name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+const COLORS = [
+  '#7c6aff','#4f46e5','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6'
+];
+function colorFor(name) {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
+  return COLORS[Math.abs(h) % COLORS.length];
+}
+
+function buildCard(profile) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.title = `Launch as ${profile.name}`;
+
+  // Preview area
+  const preview = document.createElement('div');
+  preview.className = 'preview';
+
+  // Model type chip
+  const chip = document.createElement('div');
+  chip.className = 'model-indicator';
+  chip.textContent = profile.renderer === 'vrm' ? '3D' : '2D';
+  preview.appendChild(chip);
+
+  let placeholder = null;
+
+  if (profile.profile_image) {
+    const img = document.createElement('img');
+    img.src = profile.profile_image;
+    img.alt = profile.name;
+    preview.appendChild(img);
+  } else {
+    // Spinner placeholder while rendering
+    placeholder = document.createElement('div');
+    placeholder.className = 'placeholder';
+
+    if (profile.renderer === 'vrm' && profile.model_url) {
+      const spinEl = document.createElement('div');
+      spinEl.className = 'spin';
+      placeholder.appendChild(spinEl);
+    } else {
+      const circle = document.createElement('div');
+      circle.className = 'avatar-circle';
+      circle.style.background = `linear-gradient(135deg, ${colorFor(profile.name)}, #4f46e5)`;
+      circle.textContent = initials(profile.name);
+      const lbl = document.createElement('div');
+      lbl.className = 'placeholder-label';
+      lbl.textContent = profile.live2d_model_name || 'Live2D';
+      placeholder.appendChild(circle);
+      placeholder.appendChild(lbl);
+    }
+
+    preview.appendChild(placeholder);
+  }
+  card.appendChild(preview);
+
+  // Info area
+  const info = document.createElement('div');
+  info.className = 'info';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = profile.name;
+  info.appendChild(h2);
+
+  const badges = document.createElement('div');
+  badges.className = 'badges';
+
+  if (profile.llm_provider) {
+    const b = document.createElement('span');
+    b.className = 'badge llm';
+    b.title = profile.llm_model ? `${profile.llm_provider} — ${profile.llm_model}` : profile.llm_provider;
+    b.textContent = profile.llm_model
+      ? `${profile.llm_provider.replace('_llm', '')} · ${profile.llm_model}`
+      : profile.llm_provider.replace('_llm', '');
+    badges.appendChild(b);
+  }
+
+  if (profile.tts_model) {
+    const b = document.createElement('span');
+    b.className = 'badge tts';
+    b.title = profile.tts_voice ? `${profile.tts_model} — ${profile.tts_voice}` : profile.tts_model;
+    b.textContent = profile.tts_voice
+      ? `${profile.tts_model.replace('_tts', '')} · ${profile.tts_voice.split('-').pop()}`
+      : profile.tts_model.replace('_tts', '');
+    badges.appendChild(b);
+  }
+
+  if (profile.live2d_model_name) {
+    const b = document.createElement('span');
+    b.className = 'badge model';
+    b.textContent = profile.live2d_model_name;
+    badges.appendChild(b);
+  }
+
+  info.appendChild(badges);
+  card.appendChild(info);
+
+  // Click handler
+  card.addEventListener('click', () => selectProfile(profile.filename, card));
+
+  return { card, preview, placeholder };
+}
+
+// ── Profile selection ────────────────────────────────────────────────────────
+async function selectProfile(filename, cardEl) {
+  // Mark card selected visually
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+  if (cardEl) cardEl.classList.add('selected');
+
+  // Register selection server-side (IP-keyed store, read by WS handler on connect)
+  try {
+    await fetch(`/api/select-profile?config=${encodeURIComponent(filename)}`, { method: 'POST' });
+  } catch (e) {
+    console.warn('select-profile registration failed:', e);
+  }
+
+  // Small delay so the animation is visible before redirect
+  setTimeout(() => { window.location.href = '/'; }, 220);
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+async function main() {
+  const statusEl = document.getElementById('status');
+  const gridEl   = document.getElementById('grid');
+
+  let profiles;
+  try {
+    const resp = await fetch('/api/profiles');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    profiles = await resp.json();
+  } catch (err) {
+    statusEl.innerHTML = `<span style="color:#f87171">Failed to load profiles: ${err.message}</span>
+      <button onclick="location.reload()" style="padding:0.4rem 1rem;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#e2e2f0;cursor:pointer;font-size:0.85rem;">Retry</button>`;
+    return;
+  }
+
+  if (!profiles.length) {
+    statusEl.textContent = 'No profiles found. Add character YAML files to the characters/ directory.';
+    return;
+  }
+
+  // Load Three.js deps (non-blocking — we'll render previews progressively)
+  const depsPromise = loadDeps().catch(() => {});
+
+  // Build all cards immediately
+  const cardItems = profiles.map(buildCard);
+  cardItems.forEach(({ card }) => gridEl.appendChild(card));
+
+  statusEl.style.display = 'none';
+  gridEl.style.display = 'flex';
+
+  // After deps load, render VRM previews sequentially
+  await depsPromise;
+
+  for (const { card, preview, placeholder, profile } of cardItems.map((ci, i) => ({ ...ci, profile: profiles[i] }))) {
+    if (profile.profile_image || profile.renderer !== 'vrm' || !profile.model_url) continue;
+    try {
+      const dataUrl = await renderVRMSnapshot(
+        profile.model_url,
+        profile.camera_position,
+        profile.camera_target,
+        280,
+        220,
+      );
+      if (dataUrl) {
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = profile.name;
+        // Fade in
+        img.style.opacity = '0';
+        img.style.transition = 'opacity 0.4s ease';
+        preview.insertBefore(img, placeholder);
+        placeholder.style.display = 'none';
+        requestAnimationFrame(() => { img.style.opacity = '1'; });
+      } else {
+        // Render failed — show initials fallback
+        if (placeholder) showFallback(placeholder, profile);
+      }
+    } catch {
+      if (placeholder) showFallback(placeholder, profile);
+    }
+  }
+
+  // Dispose shared renderer to free GPU memory
+  if (sharedRenderer) {
+    sharedRenderer.dispose();
+    sharedRenderer = null;
+  }
+}
+
+function showFallback(placeholder, profile) {
+  placeholder.innerHTML = '';
+  const circle = document.createElement('div');
+  circle.className = 'avatar-circle';
+  circle.style.background = `linear-gradient(135deg, ${colorFor(profile.name)}, #4f46e5)`;
+  circle.textContent = initials(profile.name);
+  const lbl = document.createElement('div');
+  lbl.className = 'placeholder-label';
+  lbl.textContent = profile.live2d_model_name || '';
+  placeholder.appendChild(circle);
+  placeholder.appendChild(lbl);
+}
+
+main();
+</script>
+</body>
+</html>

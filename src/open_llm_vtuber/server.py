@@ -20,6 +20,8 @@ from .routes import (
     init_webtool_routes,
     init_proxy_route,
     init_vrm_routes,
+    init_profile_routes,
+    init_esp32_routes,
 )
 from .service_context import ServiceContext
 from .config_manager.utils import Config
@@ -112,9 +114,14 @@ class WebSocketServer:
         self.app.include_router(
             init_vrm_routes(ws_handler=self.ws_handler),
         )
-
+        self.app.include_router(
+            init_esp32_routes(ws_handler=self.ws_handler),
+        )
         # Initialize and include proxy routes if proxy is enabled
         system_config = config.system_config
+        self.app.include_router(
+            init_profile_routes(config_alts_dir=system_config.config_alts_dir),
+        )
         if hasattr(system_config, "enable_proxy") and system_config.enable_proxy:
             # Construct the server URL for the proxy
             host = system_config.host
@@ -161,25 +168,28 @@ class WebSocketServer:
             )
 
         # Mount web tool directory separately from frontend
-        self.app.mount(
-            "/web-tool",
-            CORSStaticFiles(directory="web_tool", html=True),
-            name="web_tool",
-        )
+        if os.path.exists("web_tool"):
+            self.app.mount(
+                "/web-tool",
+                CORSStaticFiles(directory="web_tool", html=True),
+                name="web_tool",
+            )
 
         # Mount mediapipe-avatar for standalone testing/use
-        self.app.mount(
-            "/mediapipe-avatar",
-            CORSStaticFiles(directory="mediapipe-avatar", html=True),
-            name="mediapipe-avatar",
-        )
+        if os.path.exists("mediapipe-avatar"):
+            self.app.mount(
+                "/mediapipe-avatar",
+                CORSStaticFiles(directory="mediapipe-avatar", html=True),
+                name="mediapipe-avatar",
+            )
 
         # Mount main frontend last (as catch-all)
-        self.app.mount(
-            "/",
-            CORSStaticFiles(directory="frontend", html=True),
-            name="frontend",
-        )
+        if os.path.exists("frontend"):
+            self.app.mount(
+                "/",
+                CORSStaticFiles(directory="frontend", html=True),
+                name="frontend",
+            )
 
     async def initialize(self):
         """Asynchronously load the service context from config.

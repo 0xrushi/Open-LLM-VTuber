@@ -183,24 +183,8 @@ class TTSTaskManager:
             await self._payload_queue.put((payload, sequence_number))
 
         except Exception as e:
-            logger.error(f"Error preparing audio payload: {e}")
-            # Queue silent payload for error case
-            payload = prepare_audio_payload(
-                audio_path=None,
-                display_text=display_text,
-                actions=actions,
-            )
-            server_ts_ms = int(time.time() * 1000)
-            payload["server_ts_ms"] = server_ts_ms
-            payload["perf"] = {
-                "turn_id": self.turn_id,
-                "audio_seq": sequence_number,
-                "tts_gen_ms": None,
-                "payload_prep_ms": None,
-                "server_sent_ts_ms": server_ts_ms,
-                "error": str(e),
-            }
-            await self._payload_queue.put((payload, sequence_number))
+            logger.error(f"TTS generation failed: {e}")
+            raise
 
         finally:
             if audio_file_path:
@@ -217,7 +201,11 @@ class TTSTaskManager:
 
     def clear(self) -> None:
         """Clear all pending tasks and reset state"""
+        for task in self.task_list:
+            if not task.done():
+                task.cancel()
         self.task_list.clear()
+
         if self._sender_task:
             self._sender_task.cancel()
         self._sequence_counter = 0

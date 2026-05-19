@@ -78,3 +78,27 @@ mcp_servers.json
 
 .vscode/
 mcp_servers.json
+
+*.wav
+
+*.egg-info/
+
+# Claude Code / local agent notes (not for the repo)
+.claude/
+MEMORY.md
+plan.md
+
+# environment-editor: commit source; build dist locally
+environment-editor/dist/
+environment-editor/node_modules/
+
+# Local dev clones and side projects
+.unipi/
+Open-LLM-VTuber-Web/
+mediapipe-avatar/
+mmposeclone/
+
+# TLS keys, Redis dumps, ffmpeg pass logs
+*.pem
+dump.rdb
+ffmpeg2pass-*

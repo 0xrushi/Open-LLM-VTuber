@@ -68,9 +68,9 @@ character_config:
         # 'Plus' 意味着它包含了通过 OpenAI API 调用工具的能力。
         use_mcpp: False
         mcp_enabled_servers: ["time", "ddg-search"] # 启用的 MCP 服务器
-        # Guidance 风格的严格路由：让模型先判断是普通对话还是 openclaw 工具调用。
+        # Guidance 风格的严格路由：让模型先判断是普通对话还是工具调用。
         guidance_tool_router_enabled: False
-        guidance_tool_router_target_servers: [] # 例如 ["weather", "discord"]
+        guidance_tool_router_target_servers: [] # 例如 ["obsidian", "time"]
         # 可选独立视觉模型，用于处理摄像头/屏幕图像。
         # 启用后，图像会先由视觉模型总结，再把文本总结提供给聊天 LLM。
         vision_config:
@@ -513,11 +513,13 @@ character_config:
     translator_config:
       # 比如...你说话并阅读英语字幕，而 TTS 说日语之类的
       translate_audio: False # 警告：请确保翻译引擎配置成功再开启此选项，否则会翻译失败
-      translate_provider: 'deeplx' # 翻译提供商, 目前支持 deeplx 或 tencent
+      translate_provider: 'gemini' # 翻译提供商, 目前支持 gemini 或 tencent
 
-      deeplx:
-        deeplx_target_lang: 'JA'
-        deeplx_api_endpoint: 'http://localhost:1188/v2/translate'
+      gemini:
+        gemini_api_key: '您的 Gemini API 密钥'
+        model: 'gemini-1.5-flash'
+        base_url: 'https://generativelanguage.googleapis.com/v1beta/openai/'
+        target_lang: 'Japanese'
 
 
       #  腾讯文本翻译  每月500万字符  记得关闭后付费,需要手动前往 机器翻译控制台 > 系统设置 关闭

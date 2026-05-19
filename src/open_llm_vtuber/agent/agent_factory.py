@@ -66,10 +66,16 @@ class AgentFactory:
             if vision_config.get("enabled", False):
                 vision_model = vision_config.get("vision_model", "smolvlm2")
                 vision_model_config = vision_config.get(vision_model, {})
-                vision_engine = VisionFactory.get_vision_engine(
-                    vision_model,
-                    **vision_model_config,
-                )
+                try:
+                    vision_engine = VisionFactory.get_vision_engine(
+                        vision_model,
+                        **vision_model_config,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        f"Failed to initialize vision engine '{vision_model}': {exc}. "
+                        "Proceeding without vision support."
+                    )
 
             tool_prompts = kwargs.get("system_config", {}).get("tool_prompts", {})
 

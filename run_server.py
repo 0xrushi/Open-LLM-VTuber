@@ -5,6 +5,16 @@ import asyncio
 import argparse
 import subprocess
 from pathlib import Path
+
+# Make 'open_llm_vtuber' importable without installing the package.
+# This must happen before any other local imports so that bare
+# 'from open_llm_vtuber.*' imports inside the src tree also work.
+_src = str(Path(__file__).parent / "src")
+if _src not in sys.path:
+    sys.path.insert(0, _src)
+_existing = os.environ.get("PYTHONPATH", "")
+os.environ["PYTHONPATH"] = _src + (":" + _existing if _existing else "")
+
 import tomli
 import uvicorn
 from loguru import logger
@@ -113,11 +123,50 @@ def parse_args():
     parser.add_argument(
         "--hf_mirror", action="store_true", help="Use Hugging Face mirror"
     )
+    parser.add_argument(
+        "--https", action="store_true", help="Enable HTTPS with self-signed certificate"
+    )
     return parser.parse_args()
 
 
+def generate_self_signed_cert():
+    """Generate a self-signed certificate if it doesn't exist."""
+    cert_file = "cert.pem"
+    key_file = "key.pem"
+    if not os.path.exists(cert_file) or not os.path.exists(key_file):
+        logger.info("Generating self-signed certificate for HTTPS...")
+        try:
+            subprocess.run(
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:4096",
+                    "-keyout",
+                    key_file,
+                    "-out",
+                    cert_file,
+                    "-sha256",
+                    "-days",
+                    "365",
+                    "-nodes",
+                    "-subj",
+                    "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=localhost",
+                ],
+                check=True,
+                capture_output=True,
+            )
+            logger.info("👍 Self-signed certificate generated successfully.")
+        except Exception as e:
+            logger.error(f"Failed to generate self-signed certificate: {e}")
+            logger.warning("Please ensure 'openssl' is installed on your system.")
+            return False
+    return True
+
+
 @logger.catch
-def run(console_log_level: str):
+def run(console_log_level: str, use_https: bool = False):
     init_logger(console_log_level)
     logger.info(f"Open-LLM-VTuber, version v{get_version()}")
 
@@ -154,13 +203,29 @@ def run(console_log_level: str):
         logger.error(f"Failed to initialize server context: {e}")
         sys.exit(1)  # Exit if initialization fails
 
+    # Configure HTTPS if requested
+    ssl_keyfile = None
+    ssl_certfile = None
+    if use_https:
+        if generate_self_signed_cert():
+            ssl_keyfile = "key.pem"
+            ssl_certfile = "cert.pem"
+            protocol = "https"
+        else:
+            logger.error("HTTPS requested but certificate generation failed. Falling back to HTTP.")
+            protocol = "http"
+    else:
+        protocol = "http"
+
     # Run the Uvicorn server
-    logger.info(f"Starting server on {server_config.host}:{server_config.port}")
+    logger.info(f"Starting server on {protocol}://{server_config.host}:{server_config.port}")
     uvicorn.run(
         app=server.app,
         host=server_config.host,
         port=server_config.port,
         log_level=console_log_level.lower(),
+        ssl_keyfile=ssl_keyfile,
+        ssl_certfile=ssl_certfile,
     )
 
 
@@ -175,4 +240,4 @@ if __name__ == "__main__":
         )
     if args.hf_mirror:
         os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-    run(console_log_level=console_log_level)
+    run(console_log_level=console_log_level, use_https=args.https)

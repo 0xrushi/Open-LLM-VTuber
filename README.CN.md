@@ -112,7 +112,7 @@
 
 然而，通过ModelScope或Hugging Face下载的模型可能也存在于`MODELSCOPE_CACHE`或`HF_HOME`中。虽然我们尽量将它们保存在项目的`models`目录中，但再次检查也无妨。
 
-查看安装指南中，你所安装但可能不再需要的任何额外工具，例如`uv`、`ffmpeg`或`deeplx`。
+查看安装指南中，你所安装但可能不再需要的任何额外工具，例如`uv`或`ffmpeg`。
 
 ## 🤗 想为项目做贡献?
 可以看看 [开发指南](https://docs.llmvtuber.com/docs/development-guide/overview).

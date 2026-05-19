@@ -32,6 +32,7 @@ class FormattedTool:
     Args:
         input_schema (dict[str, Any]): Input schema for the tool.
         related_server (str): The name of the server that contains the tool.
+            Use "direct" for locally-registered Python callables.
         generic_schema (Optional[dict[str, Any]], optional): Generic schema for the tool. Defaults to None.
         description (str, optional): Description of the tool, usually from the server's tool definition. Defaults to "No description available.".
     """

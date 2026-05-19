@@ -120,6 +120,10 @@ async def handle_individual_interrupt(
         if task and not task.done():
             task.cancel()
             logger.info("🛑 Conversation task was successfully interrupted")
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
         try:
             context.agent_engine.handle_interrupt(heard_response)
