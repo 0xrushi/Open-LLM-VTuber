@@ -8,6 +8,8 @@ cartesia==2.0.17
     # via open-llm-vtuber (pyproject.toml)
 chardet==5.2.0
     # via open-llm-vtuber (pyproject.toml)
+chromadb==1.5.9
+    # via open-llm-vtuber (pyproject.toml)
 duckduckgo-mcp-server==0.1.1
     # via open-llm-vtuber (pyproject.toml)
 edge-tts==7.2.3
@@ -28,6 +30,8 @@ loguru==0.7.3
     # via open-llm-vtuber (pyproject.toml)
 mcp==1.15.0
     # via open-llm-vtuber (pyproject.toml)
+num2words==0.5.14
+    # via open-llm-vtuber (pyproject.toml)
 numpy==1.26.4
     # via open-llm-vtuber (pyproject.toml)
 onnxruntime==1.23.0
@@ -38,6 +42,10 @@ pillow==12.1.1
     # via open-llm-vtuber (pyproject.toml)
 pre-commit==4.3.0
     # via open-llm-vtuber (pyproject.toml)
+psycopg==3.3.4
+    # via open-llm-vtuber (pyproject.toml)
+pydantic-ai==1.98.0
+    # via open-llm-vtuber (pyproject.toml)
 pydub==0.25.1
     # via open-llm-vtuber (pyproject.toml)
 pysbd==0.3.4
@@ -46,7 +54,11 @@ pyttsx3==2.99
     # via open-llm-vtuber (pyproject.toml)
 pyyaml==6.0.3
     # via open-llm-vtuber (pyproject.toml)
+redis==7.4.0
+    # via open-llm-vtuber (pyproject.toml)
 requests==2.32.5
+    # via open-llm-vtuber (pyproject.toml)
+rq==2.9.0
     # via open-llm-vtuber (pyproject.toml)
 ruamel-yaml==0.18.15
     # via open-llm-vtuber (pyproject.toml)
