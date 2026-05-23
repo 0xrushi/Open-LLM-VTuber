@@ -2273,6 +2273,7 @@ dependencies = [
     { name = "numpy" },
     { name = "onnxruntime" },
     { name = "openai" },
+    { name = "pi-client" },
     { name = "pillow" },
     { name = "pre-commit" },
     { name = "psycopg", extra = ["binary"] },
@@ -2340,6 +2341,7 @@ requires-dist = [
     { name = "onnxruntime", specifier = ">=1.20.1" },
     { name = "openai", specifier = ">=1.57.4" },
     { name = "opencv-python", marker = "extra == 'motion'", specifier = ">=4.8.0" },
+    { name = "pi-client", directory = "../tmp/pi-python-client" },
     { name = "pillow", specifier = ">=10.4.0" },
     { name = "pre-commit", specifier = ">=4.1.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
@@ -2586,6 +2588,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/d0/63/68dbb6eb2de9cb10e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/ef/eb23f262cca3c0c4eb7ab1933c3b1f03d021f2c48f54763065b6f0e321be/packaging-24.2-py3-none-any.whl", hash = "sha256:09abb1bccd265c01f4a3aa3f7a7db064b36514d2cba19a2f694fe6150451a759", size = 65451 },
 ]
+
+[[package]]
+name = "pi-client"
+version = "0.1.0"
+source = { directory = "../tmp/pi-python-client" }
 
 [[package]]
 name = "pillow"

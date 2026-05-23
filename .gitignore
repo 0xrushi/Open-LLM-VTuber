@@ -102,3 +102,4 @@ mmposeclone/
 *.pem
 dump.rdb
 ffmpeg2pass-*
+~/.pi/

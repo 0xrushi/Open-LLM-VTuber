@@ -194,11 +194,15 @@ class ToolExecutor:
         tool_name: str,
         tool_id: str,
         tool_input: Any,
+        background: bool = False,
     ) -> tuple[bool, str, Dict[str, Any], List[Dict[str, Any]]]:
         """Execute a direct-call Python tool (no MCP server).
 
         Direct tools are registered via ToolManager.register_direct_tool()
         and have ``related_server="direct"``.
+
+        When background=True, the tool runs in an asyncio.Task and returns
+        an immediately-yielding placeholder so the conversation loop doesn't block.
         """
         func = self._tool_manager.get_direct_tool(tool_name)
         if func is None:
@@ -208,6 +212,44 @@ class ToolExecutor:
                 f"Error: Direct tool '{tool_name}' is not available.",
                 {},
                 [{"type": "error", "text": f"Tool '{tool_name}' not found."}],
+            )
+
+        if background:
+            # Run in background — return placeholder so the caller can yield
+            # a status update and continue without blocking on the tool.
+            async def _worker() -> tuple[bool, str, Dict[str, Any], List[Dict[str, Any]]]:
+                logger.info(f"[BG_TOOL_WORKER] Starting background execution of {tool_name}")
+                try:
+                    result = await func(**(tool_input if isinstance(tool_input, dict) else {}))
+                    text_content = str(result)
+                    logger.info(f"[BG_TOOL_WORKER] {tool_name} completed successfully (content_len={len(text_content) if text_content else 0})")
+                    return (
+                        False,
+                        text_content,
+                        {},
+                        [{"type": "text", "text": text_content}],
+                    )
+                except Exception as exc:
+                    logger.exception(f"[BG_TOOL_WORKER] Error executing direct tool '{tool_name}': {exc}")
+                    text_content = f"Error executing direct tool '{tool_name}': {exc}"
+                    return (
+                        True,
+                        text_content,
+                        {},
+                        [{"type": "error", "text": text_content}],
+                    )
+
+            task = asyncio.create_task(_worker())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+
+            # Return a placeholder that signals the tool is running in background
+            queued_text = f"{tool_name.replace('_', ' ').title()} queued in background."
+            return (
+                False,
+                queued_text,
+                {"_bg_task": task, "_tool_name": tool_name, "_tool_id": tool_id},
+                [{"type": "text", "text": queued_text}],
             )
 
         try:
@@ -895,13 +937,15 @@ class ToolExecutor:
                     tool_input=tool_input,
                 )
             elif related_server == "direct" and tool_info:
+                # Run all direct tools (pi_obsidian_agent, pi_web_search, etc.)
+                # in the background so the conversation loop doesn't block.
                 (
                     is_error,
                     text_content,
                     metadata,
                     content_items,
                 ) = await self._run_direct_tool(
-                    tool_name, tool_id, tool_input
+                    tool_name, tool_id, tool_input, background=True
                 )
             else:
                 (

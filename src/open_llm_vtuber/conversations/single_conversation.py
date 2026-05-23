@@ -22,7 +22,7 @@ from ..service_context import ServiceContext
 from ..scene_action_skill import resolve_scene_action_from_text
 
 # Import necessary types from agent outputs
-from ..agent.output_types import SentenceOutput, AudioOutput
+from ..agent.output_types import SentenceOutput, AudioOutput, ToolCallStatus
 from ..agent.output_types import Actions, DisplayText
 from ..skills.weather_timer.skill import (
     format_timer_complete_response,
@@ -220,13 +220,6 @@ async def process_single_conversation(
             logger.info(f"With {len(images)} images")
 
         try:
-            if hasattr(context.agent_engine, "set_runtime_tooling"):
-                context.agent_engine.set_runtime_tooling(
-                    tool_manager=context.tool_manager,
-                    tool_executor=context.tool_executor,
-                    mcp_prompt_string=context.mcp_prompt,
-                )
-
             # agent.chat yields Union[SentenceOutput, Dict[str, Any]]
             llm_t0 = time.perf_counter()
             first_agent_item_ms: float | None = None
@@ -239,15 +232,26 @@ async def process_single_conversation(
                         f"[PERF][AGENT] turn={turn_id} first_item_ms={first_agent_item_ms:.1f}"
                     )
 
-                if (
-                    isinstance(output_item, dict)
-                    and output_item.get("type") == "tool_call_status"
-                ):
-                    # Handle tool status event: send WebSocket message
-                    output_item["name"] = context.character_config.character_name
+                if isinstance(output_item, ToolCallStatus):
+                    # Forward tool status to the frontend.
+                    if output_item.name is None:
+                        output_item = output_item.model_copy(
+                            update={"name": context.character_config.character_name}
+                        )
                     logger.debug(f"Sending tool status update: {output_item}")
-
-                    await websocket_send(json.dumps(output_item))
+                    await websocket_send(output_item.model_dump_json(exclude_none=False))
+                elif (
+                    isinstance(output_item, dict)
+                    and output_item.get("type") == "internal_debug_trace"
+                ):
+                    debug_event = {
+                        "type": "internal_debug_trace",
+                        "name": context.character_config.character_name,
+                        "title": output_item.get("title", "Internal trace"),
+                        "content": output_item.get("content", ""),
+                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    }
+                    await websocket_send(json.dumps(debug_event))
 
                 elif isinstance(output_item, (SentenceOutput, AudioOutput)):
                     # Handle SentenceOutput or AudioOutput

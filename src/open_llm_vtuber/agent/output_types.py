@@ -1,6 +1,8 @@
 from dataclasses import dataclass, asdict
-from typing import List, Optional
+from typing import List, Literal, Optional
 from abc import ABC, abstractmethod
+
+from pydantic import BaseModel, Field
 
 
 @dataclass
@@ -61,6 +63,18 @@ class SentenceOutput(BaseOutput):
     async def __aiter__(self):
         """Yield the sentence pair and actions"""
         yield self.display_text, self.tts_text, self.actions
+
+
+class ToolCallStatus(BaseModel):
+    """Streamed from agent.chat() when a tool is invoked; forwarded to the frontend."""
+
+    type: Literal["tool_call_status"] = Field("tool_call_status", frozen=True)
+    tool_id: str
+    tool_name: str
+    status: Literal["running", "completed", "error"]
+    content: str
+    timestamp: str
+    name: Optional[str] = None
 
 
 @dataclass

@@ -1,24 +1,25 @@
-"""Direct tool: web search via vendored pi-agent-py subprocess helper."""
+"""Direct tool: web search via pi RPC client."""
 from __future__ import annotations
 
+import asyncio
 import os
-from pathlib import Path
 
-from .pi_agent_py.pi_tool import run_pi
+from ..pi_client import PiClient, PiConfig
 
 
 async def pi_web_search(query: str, max_results: int = 5) -> str:
-    """Search the web via `pi` using a configured skill."""
+    """Search the web via `pi` using configured BrowserOS skill."""
     q = (query or "").strip()
     if not q:
         raise ValueError("query must be a non-empty string")
 
     max_results = max(1, min(int(max_results), 10))
     skill_name = os.environ.get("PI_WEB_SEARCH_SKILL", "browseros-pi")
-    provider = os.environ.get("PI_WEB_SEARCH_PROVIDER")
-    model = os.environ.get("PI_WEB_SEARCH_MODEL")
+    provider = os.environ.get("PI_WEB_SEARCH_PROVIDER") or None
+    model = os.environ.get("PI_WEB_SEARCH_MODEL") or None
     pi_bin = os.environ.get("PI_WEB_SEARCH_BIN", "pi")
-    timeout = float(os.environ.get("PI_WEB_SEARCH_TIMEOUT_SEC", "180"))
+    timeout = float(os.environ.get("PI_WEB_SEARCH_TIMEOUT_SEC", "240"))
+    tools = os.environ.get("PI_WEB_SEARCH_TOOLS") or None
 
     prompt = (
         "Use BrowserOS skill tools to browse and search the web.\n"
@@ -30,16 +31,27 @@ async def pi_web_search(query: str, max_results: int = 5) -> str:
         "1. title | url | short summary\n"
         "Each line must be <= 140 characters."
     )
-
-    return await run_pi(
-        prompt=prompt,
-        skills=[skill_name],
-        extensions=[],
+    config = PiConfig(
+        pi_bin=pi_bin,
         provider=provider,
         model=model,
-        pi_bin=pi_bin,
-        timeout=timeout,
+        no_session=True,
+        skill=skill_name,
+        tools=tools,
     )
+
+    def _run_prompt() -> str:
+        with PiClient(config) as client:
+            result = client.prompt(prompt)
+            text = (result.text or "").strip()
+            return text or "Web search completed but returned no text output."
+
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_run_prompt), timeout=timeout)
+    except asyncio.TimeoutError as exc:
+        raise RuntimeError(
+            f"Web search timed out after {int(timeout)}s. Try a narrower query."
+        ) from exc
 
 
 PI_WEB_SEARCH_SCHEMA = {

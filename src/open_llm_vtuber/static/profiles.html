@@ -488,6 +488,21 @@ async function main() {
     return;
   }
 
+  // Keep related character cards adjacent in the picker.
+  const clusterOrder = ['yidhari', 'makima', 'reze'];
+  const clusterRank = new Map(clusterOrder.map((name, idx) => [name, idx]));
+  profiles = profiles
+    .map((profile, idx) => ({ profile, idx }))
+    .sort((a, b) => {
+      const aName = String(a.profile?.name || '').trim().toLowerCase();
+      const bName = String(b.profile?.name || '').trim().toLowerCase();
+      const aRank = clusterRank.has(aName) ? clusterRank.get(aName) : Number.POSITIVE_INFINITY;
+      const bRank = clusterRank.has(bName) ? clusterRank.get(bName) : Number.POSITIVE_INFINITY;
+      if (aRank !== bRank) return aRank - bRank;
+      return a.idx - b.idx;
+    })
+    .map((entry) => entry.profile);
+
   if (!profiles.length) {
     statusEl.textContent = 'No profiles found. Add character YAML files to the characters/ directory.';
     return;

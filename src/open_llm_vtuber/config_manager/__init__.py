@@ -47,12 +47,8 @@ from .i18n import I18nMixin, Description, MultiLingualString
 from .agent import (
     AgentConfig,
     AgentSettings,
+    PiAgentConfig,
     StatelessLLMConfigs,
-    BasicMemoryAgentConfig,
-    Mem0Config,
-    Mem0VectorStoreConfig,
-    Mem0LLMConfig,
-    Mem0EmbedderConfig,
 )
 from .vision import VisionConfig, SmolVLM2VisionConfig
 
@@ -79,12 +75,8 @@ __all__ = [
     # Agent related classes
     "AgentConfig",
     "AgentSettings",
+    "PiAgentConfig",
     "StatelessLLMConfigs",
-    "BasicMemoryAgentConfig",
-    "Mem0Config",
-    "Mem0VectorStoreConfig",
-    "Mem0LLMConfig",
-    "Mem0EmbedderConfig",
     "VisionConfig",
     "SmolVLM2VisionConfig",
     # ASR related classes

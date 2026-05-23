@@ -1,5 +1,6 @@
 from typing import AsyncIterator, Tuple, Callable, List, Union, Dict, Any
 from functools import wraps
+import re
 from .output_types import Actions, SentenceOutput, DisplayText
 from ..utils.tts_preprocessor import tts_filter as filter_text
 from ..live2d_model import Live2dModel
@@ -7,6 +8,52 @@ from ..config_manager import TTSPreprocessorConfig
 from ..utils.sentence_divider import SentenceDivider
 from ..utils.sentence_divider import SentenceWithTags, TagState
 from loguru import logger
+
+_HARMONY_FINAL_RE = re.compile(
+    r"<\|start\|>assistant<\|channel\|>final(?:[^<]*)<\|message\|>(.*?)(?:<\|return\|>|<\|end\|>|$)",
+    re.DOTALL,
+)
+_HARMONY_INTERNAL_RE = re.compile(
+    r"<\|channel\|>(analysis|commentary)\b.*?(?=<\|start\|>assistant<\|channel\|>final<\|message\|>|$)",
+    re.DOTALL,
+)
+_HARMONY_TOKEN_RE = re.compile(r"<\|[^>]+\|>")
+
+
+def _normalize_spaces(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+def _sanitize_user_text(text: str) -> Tuple[str, str]:
+    """Return user-visible text plus stripped internal trace (if any)."""
+    raw = (text or "").strip()
+    if not raw:
+        return "", ""
+
+    if "<|" not in raw:
+        return raw, ""
+
+    debug_parts = [m.group(0).strip() for m in _HARMONY_INTERNAL_RE.finditer(raw)]
+    finals = [_normalize_spaces(m) for m in _HARMONY_FINAL_RE.findall(raw)]
+    finals = [part for part in finals if part]
+
+    if finals:
+        visible = " ".join(finals).strip()
+    else:
+        # Fallback: drop all harmony tokens and obvious channel scaffolding.
+        visible = _normalize_spaces(_HARMONY_TOKEN_RE.sub(" ", raw))
+        visible = re.sub(
+            r"\b(?:analysis|commentary|assistant|tool|to=tool\.[^\s]+)\b",
+            " ",
+            visible,
+            flags=re.IGNORECASE,
+        )
+        visible = _normalize_spaces(visible)
+
+    debug_trace = "\n\n".join(part for part in debug_parts if part).strip()
+    if not debug_trace and visible != raw:
+        debug_trace = raw
+    return visible, debug_trace
 
 
 def sentence_divider(
@@ -138,6 +185,16 @@ def display_processor():
                                 text = "("
                             elif tag.state == TagState.END:
                                 text = ")"
+
+                    text, debug_trace = _sanitize_user_text(text)
+                    if debug_trace:
+                        yield {
+                            "type": "internal_debug_trace",
+                            "title": "Model internal tool/thinking trace",
+                            "content": debug_trace,
+                        }
+                    if not text:
+                        continue
 
                     display = DisplayText(text=text)  # Simplified DisplayText creation
                     yield sentence, display, actions  # Yield the tuple
