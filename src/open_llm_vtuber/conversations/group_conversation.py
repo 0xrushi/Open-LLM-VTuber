@@ -5,7 +5,7 @@ from loguru import logger
 from fastapi import WebSocket
 import numpy as np
 
-from ..agent.output_types import AudioOutput, SentenceOutput
+from ..agent.output_types import AudioOutput, SentenceOutput, ToolCallStatus
 
 from .conversation_utils import (
     create_batch_input,
@@ -354,7 +354,17 @@ async def process_member_response(
         agent_output_stream = context.agent_engine.chat(batch_input)
 
         async for output_item in agent_output_stream:
-            if (
+            if isinstance(output_item, ToolCallStatus):
+                if broadcast_func and group_members:
+                    payload = output_item.model_dump(exclude_none=False)
+                    payload["name"] = context.character_config.character_name
+                    logger.debug(f"Broadcasting tool status update: {payload}")
+                    await broadcast_func(group_members, payload)
+                else:
+                    logger.warning(
+                        "Cannot broadcast tool status: broadcast_func or group_members missing."
+                    )
+            elif (
                 isinstance(output_item, dict)
                 and output_item.get("type") == "tool_call_status"
             ):

@@ -12,10 +12,11 @@ a new prompt(), ensuring serial access to the pi subprocess.
 """
 
 import asyncio
+import json
 import os
 import time
 import uuid
-from typing import AsyncIterator, Any, Optional, Callable, Awaitable
+from typing import AsyncIterator, Any, Optional, Callable, Awaitable, Literal
 from loguru import logger
 
 from .agent_interface import AgentInterface
@@ -41,6 +42,8 @@ class PiAgent(AgentInterface):
         interrupt_method: str = "user",
         vision_engine: Optional[VisionInterface] = None,
         pi_session_dir: str = None,
+        runtime: Literal["pi", "hermes"] = "pi",
+        runtime_bin: Optional[str] = None,
     ):
         super().__init__()
         self._live2d_model = live2d_model
@@ -52,7 +55,10 @@ class PiAgent(AgentInterface):
         self._vision_engine = vision_engine
         self._interrupt_handled = False
         self._pi_client = None
-        self._pi_session_dir = pi_session_dir or os.path.expanduser("~/.pi/vtuber_sessions")
+        self._runtime = runtime
+        self._runtime_bin = runtime_bin or ("hermes" if runtime == "hermes" else "pi")
+        default_session_dir = "~/.hermes/vtuber_sessions" if runtime == "hermes" else "~/.pi/vtuber_sessions"
+        self._pi_session_dir = pi_session_dir or os.path.expanduser(default_session_dir)
         # Injected by ServiceContext so background results can be spoken.
         self._speak_callback: Optional[Callable[[str], Awaitable[None]]] = None
         # Injected by ServiceContext to forward background tool events to the UI.
@@ -67,25 +73,55 @@ class PiAgent(AgentInterface):
         self._tool_event_callback = fn
 
     def _create_pi_client(self):
-        from pi_client import PiClient, PiConfig
+        from ...pi_client import PiClient, PiConfig
+
+        runtime_bin = self._runtime_bin
+
+        class _RuntimeClient(PiClient):
+            def _build_cmd(self_inner) -> list[str]:
+                cmd = super(_RuntimeClient, self_inner)._build_cmd()
+                cmd[0] = runtime_bin
+                return cmd
+
+        pi_skill = os.environ.get("PI_SKILL")
+        # Multi-skill support (comma-separated): e.g.
+        # PI_SKILLS="browseros-pi,mcp,discord-rag-pi,twitter-rag-pi,npm:pi-obsidian"
+        # Discord/X retrieval should prefer MCP discord/twitter tools when present.
+        pi_skills = os.environ.get(
+            "PI_SKILLS",
+            "browseros-pi,mcp,discord-rag-pi,twitter-rag-pi,npm:pi-obsidian",
+        )
+        routing_hint = (
+            "\n\n[Tool routing]\n"
+            "- For Discord history/db-rag questions, prefer MCP discord tools when available "
+            "(obsidianvtuber__discord_search / obsidianvtuber__discord_sync).\n"
+            "- For Twitter/X history questions, prefer MCP twitter tools when available "
+            "(obsidianvtuber__twitter_search / obsidianvtuber__twitter_sync).\n"
+            "- Fallback only if those tools are truly unavailable; do not claim unavailable without checking.\n"
+        )
+
         config = PiConfig(
             provider=os.environ.get("PI_PROVIDER"),
             model=os.environ.get("PI_MODEL"),
             api_key=os.environ.get("PI_API_KEY"),
             tools=os.environ.get("PI_TOOLS"),
+            skill=pi_skill if pi_skill else None,
+            skills=pi_skills,
             session_dir=self._pi_session_dir,
-            append_system_prompt=self._system_prompt,
+            append_system_prompt=(self._system_prompt or "") + routing_hint,
         )
-        client = PiClient(config)
+        client = _RuntimeClient(config)
         client.start()
         return client
 
     def _ensure_pi_client(self):
         if self._pi_client is None:
             self._pi_client = self._create_pi_client()
-            logger.info(f"PiAgent initialized (session_dir={self._pi_session_dir})")
+            logger.info(
+                f"PiAgent initialized (runtime={self._runtime}, bin={self._runtime_bin}, session_dir={self._pi_session_dir})"
+            )
 
-    async def chat(self, input_data: BaseInput) -> AsyncIterator[SentenceOutput | ToolCallStatus]:
+    async def chat(self, input_data: BaseInput) -> AsyncIterator[SentenceOutput | ToolCallStatus | dict]:
         self.reset_interrupt()
 
         batch = input_data if isinstance(input_data, BatchInput) else None
@@ -120,12 +156,11 @@ class PiAgent(AgentInterface):
         tool_events_seen = []
 
         # Register a per-call tool event handler — clear previous ones first.
-        from pi_client.events import ToolEvent
+        from ...pi_client.events import ToolEvent
         turn_client._event_handlers.clear()
 
         def _tool_handler(event):
-            if isinstance(event, ToolEvent):
-                asyncio.run_coroutine_threadsafe(event_queue.put(event), loop)
+            asyncio.run_coroutine_threadsafe(event_queue.put(event), loop)
 
         turn_client.on_event(_tool_handler)
 
@@ -144,21 +179,38 @@ class PiAgent(AgentInterface):
                 while not event_queue.empty():
                     try:
                         ev = event_queue.get_nowait()
-                        tool_events_seen.append(ev)
-                        if ev.type == "tool_execution_end":
-                            status = "error" if ev.is_error else "completed"
-                            content = str(ev.result) if ev.result else ""
-                        else:
-                            status = "running"
-                            content = str(ev.args) if ev.args else ""
-                        yield ToolCallStatus(
-                            tool_id=ev.tool_call_id or uuid.uuid4().hex[:8],
-                            tool_name=ev.tool_name,
-                            status=status,
-                            content=content,
-                            timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                            name=agent_name,
-                        )
+                        if isinstance(ev, ToolEvent):
+                            tool_events_seen.append(ev)
+                            if ev.type == "tool_execution_end":
+                                status = "error" if ev.is_error else "completed"
+                                content = str(ev.result) if ev.result else ""
+                            else:
+                                status = "running"
+                                content = str(ev.args) if ev.args else ""
+                            yield ToolCallStatus(
+                                tool_id=ev.tool_call_id or uuid.uuid4().hex[:8],
+                                tool_name=ev.tool_name,
+                                status=status,
+                                content=content,
+                                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                name=agent_name,
+                            )
+                        elif any(
+                            marker in str(getattr(ev, "type", "")).lower()
+                            for marker in ("subagent", "delegate")
+                        ):
+                            yield {
+                                "type": "internal_debug_trace",
+                                "title": f"{self._runtime.title()} sub-agent event",
+                                "content": json.dumps(
+                                    getattr(
+                                        ev,
+                                        "raw",
+                                        {"event_type": getattr(ev, "type", "unknown")},
+                                    ),
+                                    ensure_ascii=False,
+                                ),
+                            }
                     except asyncio.QueueEmpty:
                         break
 

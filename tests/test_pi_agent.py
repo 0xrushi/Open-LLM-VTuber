@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from src.open_llm_vtuber.agent.agents.pi_agent import PiAgent, _BG_THRESHOLD_SEC
 from src.open_llm_vtuber.agent.input_types import BatchInput, TextData, TextSource
-from src.open_llm_vtuber.agent.output_types import SentenceOutput
+from src.open_llm_vtuber.agent.output_types import SentenceOutput, ToolCallStatus
 
 
 def _make_agent() -> PiAgent:
@@ -23,7 +23,7 @@ def _make_input(text: str) -> BatchInput:
 
 
 def _make_tool_event(tool_name: str, event_type: str, tool_call_id: str = "tc-1"):
-    from pi_client.events import ToolEvent
+    from src.open_llm_vtuber.pi_client.events import ToolEvent
     return ToolEvent(
         type=event_type,
         raw={},
@@ -197,6 +197,52 @@ class TestPiAgentBackgroundOffload(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(len(sentence_outputs), 1)
         self.assertIn("look into", sentence_outputs[0].tts_text.lower())
         self.assertEqual(speak_received, [final_answer])
+
+    async def test_emits_tool_status_from_local_pi_client_tool_event(self):
+        """Regression: local pi_client ToolEvent must be recognized and streamed."""
+        import threading
+
+        agent = _make_agent()
+        mock_client = MagicMock()
+        mock_client._proc = True
+        mock_client._event_handlers = []
+        mock_client.on_event.side_effect = lambda h: mock_client._event_handlers.append(h)
+
+        allow_done = threading.Event()
+
+        def _blocking_prompt(_msg):
+            allow_done.wait(timeout=5.0)
+            return SimpleNamespace(text="done")
+
+        mock_client.prompt.side_effect = _blocking_prompt
+        agent._pi_client = mock_client
+
+        collected = []
+
+        async def _drive():
+            async for item in agent.chat(_make_input("use tools")):
+                collected.append(item)
+
+        task = asyncio.create_task(_drive())
+
+        for _ in range(20):
+            await asyncio.sleep(0.02)
+            if mock_client._event_handlers:
+                break
+
+        self.assertTrue(mock_client._event_handlers)
+        ev = _make_tool_event("browseros_navigate", "tool_execution_start", "tc-local")
+        for h in list(mock_client._event_handlers):
+            h(ev)
+
+        await asyncio.sleep(0.1)
+        allow_done.set()
+        await task
+
+        tool_updates = [o for o in collected if isinstance(o, ToolCallStatus)]
+        self.assertGreaterEqual(len(tool_updates), 1)
+        self.assertEqual(tool_updates[0].tool_name, "browseros_navigate")
+        self.assertEqual(tool_updates[0].status, "running")
 
     async def test_bg_deliver_calls_speak_callback_with_result(self):
         """_bg_deliver speaks the result text via the callback."""

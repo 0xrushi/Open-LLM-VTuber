@@ -47,6 +47,7 @@ from .i18n import I18nMixin, Description, MultiLingualString
 from .agent import (
     AgentConfig,
     AgentSettings,
+    HermesAgentConfig,
     PiAgentConfig,
     StatelessLLMConfigs,
 )
@@ -76,6 +77,7 @@ __all__ = [
     "AgentConfig",
     "AgentSettings",
     "PiAgentConfig",
+    "HermesAgentConfig",
     "StatelessLLMConfigs",
     "VisionConfig",
     "SmolVLM2VisionConfig",

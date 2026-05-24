@@ -222,12 +222,50 @@ def discord_search(query: str) -> str:
         them, identify patterns, infer reasons, and give a thoughtful summary.
     """
     rag = _get_discord_rag()
-    results = rag.search(query, n_results=5)
-    if not results:
-        return "No matching Discord messages found. The index may be empty — try discord_sync first."
+
+    # Keep index fresh for "did anyone share ..." style questions.
+    try:
+        rag.sync(limit=4000)
+    except Exception:
+        pass
+
+    base_query = (query or "").strip()
+    deduped_variants = rag.expand_query_variants(base_query) or [base_query]
+
+    merged: list[dict] = []
+    seen_items = set()
+    for q in deduped_variants[:5]:
+        for r in rag.search(q, n_results=8):
+            key = (
+                r.get("timestamp", ""),
+                r.get("author", ""),
+                (r.get("content", "") or "")[:180],
+            )
+            if key in seen_items:
+                continue
+            seen_items.add(key)
+            merged.append(r)
+
+    if not merged:
+        return "No matching Discord messages found. Try discord_sync, then search with alternate terms (e.g., chonky/chunking)."
+
+    # Re-rank with small lexical boosts for this query family.
+    def _boost(r: dict) -> float:
+        txt = f"{r.get('content','')} {r.get('urls','')}".lower()
+        score = float(r.get("score", 0.0))
+        if "github" in txt:
+            score += 0.08
+        if "chonky" in txt or "chunk" in txt:
+            score += 0.12
+        if "link:" in txt or "http" in txt:
+            score += 0.04
+        return score
+
+    merged.sort(key=_boost, reverse=True)
+    top = merged[:8]
 
     parts = []
-    for r in results:
+    for r in top:
         ts = r["timestamp"] or "unknown time"
         author = r["author"] or "unknown"
         entry = f"[{author} @ {ts}] (score: {r['score']})\n{r['content']}"
@@ -240,9 +278,9 @@ def discord_search(query: str) -> str:
     return (
         f"{messages_block}\n\n"
         "---\n"
-        "INSTRUCTION: Based on the messages above, reason about what they reveal and "
-        "give the user a direct, thoughtful answer. Identify causes, patterns, or key "
-        "points — do not simply list the messages."
+        "INSTRUCTION: Based on the messages above, answer directly. If a specific library/repo "
+        "appears, name who shared it and include the GitHub URL. If uncertain, "
+        "say what's missing."
     )
 
 

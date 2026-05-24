@@ -44,6 +44,7 @@ class PiConfig:
     tools: Optional[str] = None
     extension: Optional[str] = None
     skill: Optional[str] = None
+    skills: Optional[str] = None  # comma-separated multi-skill list
     no_extensions: bool = False
     no_skills: bool = False
     no_context_files: bool = False
@@ -111,6 +112,9 @@ class PiClient:
             cmd.extend(["-e", self._config.extension])
         if self._config.skill:
             cmd.extend(["--skill", self._config.skill])
+        if self._config.skills:
+            for sk in [s.strip() for s in self._config.skills.split(",") if s.strip()]:
+                cmd.extend(["--skill", sk])
         if self._config.no_extensions:
             cmd.append("--no-extensions")
         if self._config.no_skills:
@@ -298,15 +302,11 @@ class PiClient:
                     cmd = self._response_commands.pop(0)
                     return cmd
                 # Check for events (used by prompt method)
-                # Also drain stale command results to keep the queue clean
                 if self._response_events:
                     event = self._response_events.pop(0)
                     if expected_type is None or event.type == expected_type:
                         return event
                     self._response_events.insert(0, event)
-                # Drain stale command results even in event mode
-                if self._response_commands:
-                    self._response_commands.pop(0)
                 self._response_cv.wait(timeout=0.1)
 
         return None
@@ -335,6 +335,21 @@ class PiClient:
         cmd = {"id": req_id, "type": "prompt", "message": message}
         self._send(cmd)
 
+        # Prompt commands emit an immediate command response; if that fails
+        # (e.g. "Agent is already processing"), fail fast instead of silently
+        # discarding the error and waiting on unrelated events.
+        cmd_deadline = time.time() + 5.0
+        while time.time() < cmd_deadline:
+            resp = self._wait_for_response(expected_type="response", timeout=0.25)
+            if resp is None:
+                continue
+            if getattr(resp, "id", None) != req_id or getattr(resp, "command", "") != "prompt":
+                # Stale/unrelated response from another command.
+                continue
+            if not getattr(resp, "success", False):
+                raise RuntimeError(getattr(resp, "error", "prompt command failed"))
+            break
+
         # Collect events until agent_end
         final_text = ""
         final_thinking = ""
@@ -345,6 +360,7 @@ class PiClient:
         tokens_output = 0
         cost = 0.0
         stop_reason = "stop"
+        saw_stream_text = False
 
         while True:
             event = self._wait_for_response(timeout=120.0)
@@ -361,7 +377,10 @@ class PiClient:
                     if msg.get("role") == "assistant":
                         for content in msg.get("content", []):
                             if content.get("type") == "text":
-                                final_text += content.get("text", "")
+                                # Avoid duplicating assistant text when we already
+                                # accumulated text_delta stream updates.
+                                if not saw_stream_text:
+                                    final_text += content.get("text", "")
                             elif content.get("type") == "thinking":
                                 final_thinking += content.get("thinking", "")
                             elif content.get("type") == "toolCall":
@@ -385,6 +404,7 @@ class PiClient:
             if event_type == "message_update":
                 delta = event.raw.get("assistantMessageEvent", {})
                 if delta.get("type") == "text_delta":
+                    saw_stream_text = True
                     final_text += delta.get("delta", "")
 
         return PromptResult(

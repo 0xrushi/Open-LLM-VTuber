@@ -48,8 +48,24 @@ character_config:
 
   agent_config:
     conversation_agent_choice: 'basic_memory_agent'
+    # Agent types: 'basic_memory_agent', 'pi_agent', 'hermes_agent', 'letta_agent', 'hume_ai_agent'
+    # hermes_agent — wraps NousResearch Hermes Agent via ACP stdio JSON-RPC
+    # pi_agent — wraps pi agent via pi-python-client
+    # basic_memory_agent — uses direct LLM provider from llm_configs
 
     agent_settings:
+      # Hermes Agent configuration (wraps hermes-agent via ACP)
+      hermes_agent:
+        hermes_bin: 'hermes' # Path or command name for hermes executable
+        hermes_cwd: null # Working directory for hermes subprocess (default: current dir)
+
+      # Pi Agent configuration (wraps pi agent)
+      pi_agent:
+        faster_first_response: True
+        segment_method: 'pysbd'
+        interrupt_method: 'user'
+        pi_session_dir: null
+
       basic_memory_agent:
         # The Basic AI Agent. Nothing fancy.
         # choose one of the llm provider from the llm_config

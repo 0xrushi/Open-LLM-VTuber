@@ -1,6 +1,4 @@
-"""
-Agent configuration — pi_agent only.
-"""
+"""Agent configuration for Pi and Hermes runtimes."""
 
 from pydantic import BaseModel, Field
 from typing import Dict, ClassVar, Optional, Literal
@@ -38,15 +36,38 @@ class PiAgentConfig(I18nMixin, BaseModel):
     }
 
 
+class HermesAgentConfig(I18nMixin, BaseModel):
+    """Configuration for the Hermes ACP runtime adapter."""
+
+    hermes_bin: Optional[str] = Field(None, alias="hermes_bin")
+    hermes_cwd: Optional[str] = Field(None, alias="hermes_cwd")
+
+    DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
+        "hermes_bin": Description(
+            en="Path or command name for hermes executable (default: hermes)",
+            zh="hermes 可执行文件路径或命令名（默认：hermes）",
+        ),
+        "hermes_cwd": Description(
+            en="Working directory for hermes acp subprocess (default: current directory)",
+            zh="hermes acp 子进程工作目录（默认：当前目录）",
+        ),
+    }
+
+
 class AgentSettings(I18nMixin, BaseModel):
-    """Settings for the pi agent."""
+    """Settings for conversation agents."""
 
     pi_agent: Optional[PiAgentConfig] = Field(None, alias="pi_agent")
+    hermes_agent: Optional[HermesAgentConfig] = Field(None, alias="hermes_agent")
 
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
         "pi_agent": Description(
             en="Configuration for pi agent (pi-python-client wrapper)",
             zh="pi 代理配置（pi-python-client 封装）",
+        ),
+        "hermes_agent": Description(
+            en="Configuration for hermes agent (RPC runtime adapter)",
+            zh="hermes 代理配置（RPC 运行时适配器）",
         ),
     }
 
@@ -54,7 +75,7 @@ class AgentSettings(I18nMixin, BaseModel):
 class AgentConfig(I18nMixin, BaseModel):
     """Agent configuration."""
 
-    conversation_agent_choice: Literal["pi_agent"] = Field(
+    conversation_agent_choice: Literal["pi_agent", "hermes_agent"] = Field(
         "pi_agent", alias="conversation_agent_choice"
     )
     agent_settings: AgentSettings = Field(
@@ -68,10 +89,10 @@ class AgentConfig(I18nMixin, BaseModel):
             en="Type of conversation agent to use", zh="要使用的对话代理类型"
         ),
         "agent_settings": Description(
-            en="Settings for the pi agent", zh="pi 代理设置"
+            en="Settings for available conversation agents", zh="可用对话代理设置"
         ),
         "llm_configs": Description(
-            en="Unused when using pi_agent — kept for conf.yaml compatibility",
-            zh="使用 pi_agent 时不需要，保留用于兼容 conf.yaml",
+            en="Unused when using pi/hermes runtime agent — kept for conf.yaml compatibility",
+            zh="使用 pi/hermes 运行时代理时不需要，保留用于兼容 conf.yaml",
         ),
     }

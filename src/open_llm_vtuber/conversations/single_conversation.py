@@ -87,6 +87,7 @@ async def process_single_conversation(
     # Create TTSTaskManager for this conversation
     tts_manager = TTSTaskManager(turn_id=turn_id)
     full_response = ""  # Initialize full_response here
+    cancelled = False
 
     if hasattr(context, "mark_turn_start"):
         context.mark_turn_start()
@@ -242,6 +243,14 @@ async def process_single_conversation(
                     await websocket_send(output_item.model_dump_json(exclude_none=False))
                 elif (
                     isinstance(output_item, dict)
+                    and output_item.get("type") == "tool_call_status"
+                ):
+                    output_item = dict(output_item)
+                    output_item.setdefault("name", context.character_config.character_name)
+                    logger.debug(f"Sending tool status update (dict): {output_item}")
+                    await websocket_send(json.dumps(output_item))
+                elif (
+                    isinstance(output_item, dict)
                     and output_item.get("type") == "internal_debug_trace"
                 ):
                     debug_event = {
@@ -318,6 +327,7 @@ async def process_single_conversation(
         return full_response  # Return accumulated full_response
 
     except asyncio.CancelledError:
+        cancelled = True
         logger.info(f"🤡👍 Conversation {session_emoji} cancelled because interrupted.")
         raise
     except Exception as e:
@@ -329,4 +339,11 @@ async def process_single_conversation(
     finally:
         if hasattr(context, "mark_turn_end"):
             context.mark_turn_end()
-        cleanup_conversation(tts_manager, session_emoji)
+        # Keep already-queued TTS jobs alive on interrupt so async audio
+        # can still complete instead of being force-cancelled with the turn.
+        if cancelled:
+            logger.debug(
+                f"Preserving queued TTS after interrupt for conversation {session_emoji}."
+            )
+        else:
+            cleanup_conversation(tts_manager, session_emoji)

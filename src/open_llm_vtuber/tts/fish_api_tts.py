@@ -1,7 +1,22 @@
 from typing import Literal
-from fish_audio_sdk import Session, TTSRequest
 from loguru import logger
 from .tts_interface import TTSInterface
+
+# Compatibility shim: fish-audio-sdk currently pulls httpx-ws, which expects
+# anyio.AsyncContextManagerMixin on some versions.
+import anyio
+
+if not hasattr(anyio, "AsyncContextManagerMixin"):
+    class _AsyncContextManagerMixin:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+    anyio.AsyncContextManagerMixin = _AsyncContextManagerMixin
+
+from fish_audio_sdk import Session, TTSRequest
 
 
 class TTSEngine(TTSInterface):

@@ -12,6 +12,52 @@ class HybridRAGBase:
     - _embed(texts: List[str]) -> List[List[float]]
     """
 
+    @classmethod
+    def expand_query_variants(cls, query: str) -> List[str]:
+        """Generic query-variant expansion for lexical recall.
+
+        No domain hardcoding — only intent and morphology based rewrites.
+        """
+        base_query = (query or "").strip()
+        if not base_query:
+            return []
+
+        q_lower = base_query.lower()
+        variants = [base_query]
+
+        if any(k in q_lower for k in ["github", "repo", "library", "link", "shared", "source"]):
+            variants.extend([
+                f"{base_query} github repo",
+                f"{base_query} shared link",
+                f"{base_query} source code",
+            ])
+
+        tokens = [t for t in base_query.split() if t]
+        for tok in tokens:
+            t = tok.strip(".,!?()[]{}\"'").lower()
+            if len(t) < 5:
+                continue
+            morphs = []
+            if t.endswith("ing") and len(t) > 6:
+                morphs.append(t[:-3])
+            if t.endswith("ies") and len(t) > 5:
+                morphs.append(t[:-3] + "y")
+            if t.endswith("s") and not t.endswith("ss"):
+                morphs.append(t[:-1])
+            for m in morphs:
+                if m and m != t:
+                    variants.append(base_query + f" {m}")
+
+        out: List[str] = []
+        seen = set()
+        for v in variants:
+            vv = (v or "").strip()
+            if not vv or vv in seen:
+                continue
+            seen.add(vv)
+            out.append(vv)
+        return out
+
     @staticmethod
     def _tokenize(text: str) -> List[str]:
         return re.findall(r"[a-z0-9_]+", (text or "").lower())

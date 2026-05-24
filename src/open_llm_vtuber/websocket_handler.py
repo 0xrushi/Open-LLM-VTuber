@@ -153,7 +153,15 @@ class WebSocketHandler:
                 try:
                     await session_service_context.apply_config_file(pending_config)
                 except Exception as cookie_err:
-                    logger.warning(f"Could not apply cookie profile '{pending_config}': {cookie_err}")
+                    logger.error(f"Could not apply cookie profile '{pending_config}': {cookie_err}")
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "message": f"Failed to load selected profile '{pending_config}'. Falling back to default config.",
+                            }
+                        )
+                    )
 
             await self._store_client_data(
                 websocket, client_uid, session_service_context
